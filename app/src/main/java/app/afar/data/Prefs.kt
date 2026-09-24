@@ -62,7 +62,7 @@ class Prefs(context: Context) {
 
     /** The timeout actually enforced: safe mode never allows "off". */
     val effectiveIdleTimeout: Int
-        get() = idleTimeoutSec.let { if (safeMode && it <= 0) DEFAULT_IDLE else it }
+        get() = effectiveTimeout(safeMode, idleTimeoutSec)
 
     /** User agreed to the responsible-use terms. */
     var consented: Boolean
@@ -72,6 +72,10 @@ class Prefs(context: Context) {
     companion object {
         const val DEFAULT_IDLE = 60
         val IDLE_CHOICES = listOf(30, 60, 120, 300, 600, 0)
+
+        /** Safe mode never allows "off" (0). */
+        fun effectiveTimeout(safeMode: Boolean, configured: Int): Int =
+            if (safeMode && configured <= 0) DEFAULT_IDLE else configured.coerceAtLeast(0)
 
         private const val KEY_INSTALL = "install"
     }

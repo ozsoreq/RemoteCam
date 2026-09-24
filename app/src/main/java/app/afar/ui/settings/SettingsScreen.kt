@@ -35,6 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import app.afar.data.Prefs
 import app.afar.session.formatDuration
@@ -81,7 +84,7 @@ fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Uni
                             Text("Safe mode", style = AfarType.BodyStrong, color = AfarColors.Paper)
                             Text("Recommended", style = AfarType.Caption, color = AfarColors.PaperDim)
                         }
-                        Toggle(safe) {
+                        Toggle(safe, "Safe mode switch") {
                             safe = it
                             prefs.safeMode = it
                             if (it && idle <= 0) {
@@ -187,7 +190,7 @@ private fun Chip(label: String, selected: Boolean, enabled: Boolean, onClick: ()
 
 /** Small pill switch in the app's accent. */
 @Composable
-fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit) {
+fun Toggle(checked: Boolean, label: String, onChange: (Boolean) -> Unit) {
     val knob by animateDpAsState(if (checked) 22.dp else 2.dp, spring(dampingRatio = 0.7f), label = "knob")
     val fill by animateFloatAsState(if (checked) 1f else 0f, label = "fill")
     Box(
@@ -197,6 +200,10 @@ fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit) {
             .clip(CircleShape)
             .background(AfarColors.PaperGhost)
             .background(Brush.linearGradient(listOf(AfarColors.Sky, AfarColors.Azure)), alpha = fill)
+            .semantics {
+                contentDescription = label
+                stateDescription = if (checked) "On" else "Off"
+            }
             .pressable(pressedScale = 0.94f) { onChange(!checked) },
     ) {
         Box(

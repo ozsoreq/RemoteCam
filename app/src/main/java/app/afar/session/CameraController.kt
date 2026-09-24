@@ -42,6 +42,17 @@ import kotlin.math.atan
  *  - ImageCapture (full sensor resolution) → the real photo
  * plus lens switching (ultrawide / main / front) and tap-to-focus.
  */
+/**
+ * Maps a normalised point in the upright (rotated) preview frame back to the sensor buffer,
+ * given CameraX's rotationDegrees for that buffer.
+ */
+internal fun uprightToBuffer(x: Float, y: Float, rotationDegrees: Int): Pair<Float, Float> = when (rotationDegrees) {
+    90 -> y to 1 - x
+    180 -> 1 - x to 1 - y
+    270 -> 1 - y to x
+    else -> x to y
+}
+
 class CameraController(private val context: Context) {
 
     private val analysisExecutor = Executors.newSingleThreadExecutor()
@@ -147,12 +158,7 @@ class CameraController(private val context: Context) {
     fun focusUpright(x: Float, y: Float) {
         val cam = camera ?: return
         val useCase = analysis ?: return
-        val (bx, by) = when (analysisRotation) {
-            90 -> y to 1 - x
-            180 -> 1 - x to 1 - y
-            270 -> 1 - y to x
-            else -> x to y
-        }
+        val (bx, by) = uprightToBuffer(x, y, analysisRotation)
         val point = SurfaceOrientedMeteringPointFactory(1f, 1f, useCase).createPoint(bx, by)
         runCatching {
             cam.cameraControl.startFocusAndMetering(

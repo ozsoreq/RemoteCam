@@ -145,7 +145,19 @@ fun RemoteScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
     val counting = (countdown ?: 0) > 0
     val bars = session.signalBars(quality, rtt)
 
-    Box(Modifier.fillMaxSize().background(AfarColors.Ink)) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(AfarColors.Ink)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        session.userActive()
+                    }
+                }
+            },
+    ) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             // ── Top bar ──────────────────────────────────────────
             Row(

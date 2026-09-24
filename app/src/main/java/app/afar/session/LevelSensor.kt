@@ -13,6 +13,16 @@ import kotlin.math.sqrt
  * Reads the Camera phone's tilt so the Remote can draw a horizon level, and flags sudden
  * jolts ("someone bumped the phone on the rock") so the level turns red.
  */
+/**
+ * From the gravity vector in device coordinates to (frame tilt in −45…45°, device rotation
+ * in 90° steps matching Surface.ROTATION_*: 90 = rotated counter-clockwise).
+ */
+internal fun tiltFromGravity(gx: Float, gy: Float): Pair<Float, Int> {
+    val angle = Math.toDegrees(atan2(gx.toDouble(), gy.toDouble())).toFloat()
+    val q = (angle / 90f).roundToInt()
+    return (angle - q * 90f) to ((q % 4) + 4) % 4 * 90
+}
+
 class LevelSensor(context: Context) : SensorEventListener {
     private val sm = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accel = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -54,10 +64,9 @@ class LevelSensor(context: Context) : SensorEventListener {
         val gx = gravity[0]
         val gy = gravity[1]
         if (sqrt(gx * gx + gy * gy) < 3f) return // lying flat: roll is meaningless
-        val angle = Math.toDegrees(atan2(gx.toDouble(), gy.toDouble())).toFloat()
-        val q = (angle / 90f).roundToInt()
-        roll = angle - q * 90f
-        quadrant = ((q % 4) + 4) % 4 * 90
+        val (r, q) = tiltFromGravity(gx, gy)
+        roll = r
+        quadrant = q
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit

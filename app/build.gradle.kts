@@ -15,6 +15,12 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         resourceConfigurations += listOf("en")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        animationsDisabled = true
     }
 
     buildTypes {
@@ -69,4 +75,14 @@ dependencies {
     implementation(libs.zxing.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.json)
+
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

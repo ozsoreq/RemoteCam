@@ -37,6 +37,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
+/** 0…4 bars from link type and round-trip time; a Bluetooth-only link tops out at 2. */
+fun signalBars(live: Boolean, quality: LinkQuality, rtt: Long?): Int {
+    if (!live) return 0
+    val byRtt = when {
+        rtt == null -> 1
+        rtt < 60 -> 4
+        rtt < 140 -> 3
+        rtt < 300 -> 2
+        else -> 1
+    }
+    return if (quality == LinkQuality.Low) byRtt.coerceAtMost(2) else byRtt
+}
+
 /** One photo received from the Camera. */
 data class Shot(val id: String, val uri: Uri?, val image: Bitmap, val takenAt: Long)
 
@@ -98,6 +111,8 @@ class RemoteSession(
     val notices: SharedFlow<String> = _notices.asSharedFlow()
 
     private var lastPongAt = 0L
+    private var lastKeepAlive = 0L
+    private var countdownWatchdog: Job? = null
 
     /** Set when the user deliberately disconnects, so pairing doesn't snap straight back. */
     var suppressAutoConnect = false
@@ -196,6 +211,8 @@ class RemoteSession(
         _countdown.value = null
         _queuedShutter.value = null
         _rtt.value = null
+        _awaitingPhoto.value = false
+        countdownWatchdog?.cancel()
     }
 
     // region Commands to the Camera
@@ -219,6 +236,12 @@ class RemoteSession(
         if (link.send(Cmd.Shutter(timer, burst))) {
             // Optimistic countdown so the UI reacts instantly; the Camera's ticks keep it honest.
             _countdown.value = if (timer > 0) timer else 0
+            // If the Camera's ticks never arrive, don't leave the shutter stuck in "cancel" mode.
+            countdownWatchdog?.cancel()
+            countdownWatchdog = scope?.launch {
+                delay((timer + 6) * 1_000L)
+                _countdown.value = null
+            }
         }
     }
 
@@ -244,6 +267,15 @@ class RemoteSession(
     /** "Keep going" on the idle warning: counts as activity on the Camera. */
     fun keepAlive() {
         link.send(Cmd.KeepAlive)
+        lastKeepAlive = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Any touch on the Remote screen means someone is actively framing, so it counts as
+     * activity for the Camera's auto-disconnect (throttled to one message per 5 s).
+     */
+    fun userActive() {
+        if (SystemClock.elapsedRealtime() - lastKeepAlive >= 5_000 && _phase.value == LinkPhase.Live) keepAlive()
     }
 
     fun retryConnection() {
@@ -344,16 +376,5 @@ class RemoteSession(
         }
     }
 
-    /** 0…4 bars from link type and round-trip time. */
-    fun signalBars(quality: LinkQuality, rtt: Long?): Int {
-        if (_phase.value != LinkPhase.Live) return 0
-        val byRtt = when {
-            rtt == null -> 1
-            rtt < 60 -> 4
-            rtt < 140 -> 3
-            rtt < 300 -> 2
-            else -> 1
-        }
-        return if (quality == LinkQuality.Low) byRtt.coerceAtMost(2) else byRtt
-    }
+    fun signalBars(quality: LinkQuality, rtt: Long?): Int = signalBars(_phase.value == LinkPhase.Live, quality, rtt)
 }

@@ -343,10 +343,7 @@ class NearbyLink(context: Context, private val installId: String) {
     private fun fail(message: String, e: Exception) {
         Log.w(TAG, message, e)
         val code = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
-        _error.value = when (code) {
-            ConnectionsStatusCodes.STATUS_BLUETOOTH_ERROR -> "$message — is Bluetooth on?"
-            else -> message
-        }
+        _error.value = if (code == null) message else "$message — check Bluetooth and Wi-Fi are on"
     }
 
     private companion object {

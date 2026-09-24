@@ -53,6 +53,9 @@ fun formatDuration(seconds: Int): String = when {
     else -> "$seconds s"
 }
 
+/** The stricter (shorter) of two auto-disconnect settings; 0 means "off" and loses to any limit. */
+fun stricterTimeout(a: Int, b: Int): Int = listOf(a, b).filter { it > 0 }.minOrNull() ?: 0
+
 class CameraSession(
     private val context: Context,
     private val link: NearbyLink,
@@ -165,7 +168,7 @@ class CameraSession(
 
     /** Stricter of this phone's and the Remote's auto-disconnect settings (0 = off). */
     private val idleTimeout: Int
-        get() = listOf(prefs.effectiveIdleTimeout, remoteIdleTimeout).filter { it > 0 }.minOrNull() ?: 0
+        get() = stricterTimeout(prefs.effectiveIdleTimeout, remoteIdleTimeout)
 
     /** Drops the session after [idleTimeout] s without a Remote command. Returns true while warning. */
     private fun checkIdle(): Boolean {
@@ -217,8 +220,10 @@ class CameraSession(
     fun declineRemote() = link.rejectPending()
 
     fun stop() {
-        // Best effort: tell the Remote this was deliberate so it doesn't try to reconnect.
-        if (link.connection.value is Connection.Connected) link.send(Cmd.SessionEnded("The Camera was closed"))
+        // Tell the Remote this was deliberate so it doesn't try to reconnect, and give the
+        // message a moment to leave before the link is torn down (unless a new session starts).
+        val wasConnected = link.connection.value is Connection.Connected
+        if (wasConnected) link.send(Cmd.SessionEnded("The Camera was closed"))
         countdownJob?.cancel()
         sessionRemoteId = null
         remoteIdleTimeout = 0
@@ -228,7 +233,11 @@ class CameraSession(
         controller.frameSink = null
         controller.detach()
         level.stop()
-        link.stopAll()
+        if (wasConnected) {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (scope == null) link.stopAll() }, 350)
+        } else {
+            link.stopAll()
+        }
         _countdown.value = null
     }
 
