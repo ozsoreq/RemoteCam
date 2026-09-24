@@ -41,21 +41,22 @@ class SmokeTest {
     fun firstRunThroughSettingsAndConsent() {
         ActivityScenario.launch(MainActivity::class.java).use {
             // Tutorial
-            compose.onNodeWithText("STEP 01").assertIsDisplayed()
             compose.screenshot("01_onboarding")
+            compose.onNodeWithText("STEP 01").assertIsDisplayed()
             compose.onNodeWithText("Next").performClick()
+            compose.screenshot("01b_onboarding_step2")
             compose.onNodeWithText("STEP 02").assertIsDisplayed()
             compose.onNodeWithText("Skip").performClick()
 
             // Home: two roles, very little text
+            compose.screenshot("02_home")
             compose.onNodeWithText("Camera").assertIsDisplayed()
             compose.onNodeWithText("Remote").assertIsDisplayed()
-            compose.screenshot("02_home")
 
             // Settings: safe mode on by default, "Off" can't be chosen
             compose.onNodeWithContentDescription("Settings").performClick()
-            compose.onNodeWithText("Safe mode").assertIsDisplayed()
             compose.screenshot("03_settings")
+            compose.onNodeWithText("Safe mode").assertIsDisplayed()
             compose.onNodeWithText("Off").performClick()
             assertEquals(60, prefs.getInt("idle", 60))
             compose.onNodeWithText("2 min").performClick()
@@ -75,15 +76,15 @@ class SmokeTest {
             // Back home, pick Remote → agreement first
             compose.onNodeWithContentDescription("Back").performClick()
             compose.onNodeWithText("Remote").performClick()
-            compose.onNodeWithText("I agree").assertIsDisplayed()
             compose.screenshot("04_consent")
+            compose.onNodeWithText("I agree").assertIsDisplayed()
             compose.onNodeWithText("I agree").performClick()
             assertTrue(prefs.getBoolean("consent", false))
 
             // Nothing granted yet on a fresh emulator → permission screen
+            compose.screenshot("05_permissions")
             compose.onNodeWithText("Permissions").assertIsDisplayed()
             compose.onNodeWithText("Nearby devices").assertIsDisplayed()
-            compose.screenshot("05_permissions")
         }
     }
 }

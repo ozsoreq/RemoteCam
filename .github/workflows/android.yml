@@ -72,11 +72,25 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated -camera-front emulated
           script: |
-            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true || (adb logcat -d > logcat.txt; exit 1)
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true || touch tests-failed
             adb root || true
             sleep 3
             mkdir -p screens && adb pull /sdcard/Android/data/app.afar/files/screens/. screens/ || true
             adb logcat -d > logcat.txt || true
+            cat app/build/outputs/androidTest-results/connected/debug/*.xml || true
+            test ! -f tests-failed
+
+      # Small JPEG thumbnails in the log so reviewers (and agents) can see the screens without
+      # downloading the artifact.
+      - name: Screenshot thumbnails
+        if: always()
+        run: |
+          for f in screens/*.png; do
+            [ -f "$f" ] || continue
+            echo "=== SCREEN $f"
+            convert "$f" -resize 400x -quality 72 jpg:- | base64 -w 0
+            echo
+          done
 
       - uses: actions/upload-artifact@v4
         if: always()
