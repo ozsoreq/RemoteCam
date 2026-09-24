@@ -87,9 +87,12 @@ jobs:
             cat app/build/outputs/androidTest-results/connected/debug/*.xml || true
             test ! -f tests-failed
 
-      # Manual runs can refresh the README screenshots (never on ordinary pushes).
+      # Refresh docs/screenshots only when asked: a manual run, or a pushed commit whose
+      # message contains "[screenshots]". Ordinary pushes never commit anything.
       - name: Commit screenshots to docs/screenshots
-        if: github.event_name == 'workflow_dispatch' && inputs.update_screenshots
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.update_screenshots) ||
+          (github.event_name == 'push' && contains(github.event.head_commit.message, '[screenshots]'))
         run: |
           mkdir -p docs/screenshots
           cp screens/*.jpg docs/screenshots/
