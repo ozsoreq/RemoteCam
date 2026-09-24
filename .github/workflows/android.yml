@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      update_screenshots:
+        description: Commit emulator screenshots to docs/screenshots
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,6 +50,8 @@ jobs:
   ui-tests:
     # Walks the real app on an Android 14 emulator and captures screenshots of each screen.
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -80,17 +87,16 @@ jobs:
             cat app/build/outputs/androidTest-results/connected/debug/*.xml || true
             test ! -f tests-failed
 
-      # Small JPEG thumbnails in the log so reviewers (and agents) can see the screens without
-      # downloading the artifact.
-      - name: Screenshot thumbnails
-        if: always()
+      # Manual runs can refresh the README screenshots (never on ordinary pushes).
+      - name: Commit screenshots to docs/screenshots
+        if: github.event_name == 'workflow_dispatch' && inputs.update_screenshots
         run: |
-          for f in screens/*.jpg; do
-            [ -f "$f" ] || continue
-            echo "=== SCREEN $f"
-            base64 -w 0 "$f"
-            echo
-          done
+          mkdir -p docs/screenshots
+          cp screens/*.jpg docs/screenshots/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git commit -m "Update app screenshots from emulator [skip ci]" && git push origin HEAD:${{ github.ref_name }} || echo "No screenshot changes"
 
       - uses: actions/upload-artifact@v4
         if: always()

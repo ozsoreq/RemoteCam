@@ -15,8 +15,8 @@ fun ComposeTestRule.screenshot(name: String) {
     val dir = File(ctx.getExternalFilesDir(null), "screens").apply { mkdirs() }
     val bmp = onRoot().captureToImage().asAndroidBitmap()
     File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-    // Small JPEG thumbnail that CI prints into the job log.
-    val w = 360
+    // Compact JPEG for docs/screenshots.
+    val w = 540
     val thumb = Bitmap.createScaledBitmap(bmp, w, bmp.height * w / bmp.width, true)
-    File(dir, "$name.jpg").outputStream().use { thumb.compress(Bitmap.CompressFormat.JPEG, 70, it) }
+    File(dir, "$name.jpg").outputStream().use { thumb.compress(Bitmap.CompressFormat.JPEG, 84, it) }
 }
