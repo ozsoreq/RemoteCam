@@ -85,7 +85,9 @@ fun HomeScreen(lastRole: Role?, onPick: (Role) -> Unit, onHowItWorks: () -> Unit
                 GlassIconButton(AfarIcons.Settings, "Settings", onSettings)
             }
 
-            Box(Modifier.weight(1f))
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Illustration(0, Modifier.size(230.dp).enter(0, baseDelay = 200))
+            }
 
             Text(
                 buildAnnotatedString {

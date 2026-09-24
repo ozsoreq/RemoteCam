@@ -212,15 +212,16 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
             ),
         )
 
-        // Top bar
-        Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GlassIconButton(AfarIcons.Close, "Leave", onExit)
-            HSpace(10.dp)
-            Box(Modifier.weight(1f))
-            GlassIconButton(AfarIcons.Lock, "Lock screen", { locked = true })
+        // Top bar (hidden while locked so the lock screen stays uncluttered)
+        AnimatedVisibility(!locked, enter = fadeIn(), exit = fadeOut()) {
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                GlassIconButton(AfarIcons.Close, "Leave", onExit)
+                Box(Modifier.weight(1f))
+                GlassIconButton(AfarIcons.Lock, "Lock screen", { locked = true })
+            }
         }
 
         // Pause / error notices
@@ -239,7 +240,7 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
 
         // Waiting-for-Remote card / pairing code
         AnimatedVisibility(
-            !connected,
+            !connected && !locked,
             modifier = Modifier.align(Alignment.BottomCenter),
             enter = slideInVertically(tween(520, easing = EaseOutExpo)) { it / 2 } + fadeIn(),
             exit = slideOutVertically(tween(300)) { it / 2 } + fadeOut(),
@@ -373,7 +374,7 @@ private fun WaitingCard(
                         3 -> "Stopped · hidden"
                         2 -> pending?.peer?.name ?: "Remote"
                         1 -> "Connecting"
-                        else -> if (advertising) "Visible as “$deviceName”" else "Starting…"
+                        else -> if (advertising) "Ready" else "Starting…"
                     },
                     color = AfarColors.PaperDim,
                 )
@@ -406,7 +407,11 @@ private fun WaitingCard(
                             VSpace(18.dp)
                             CodeDigits(pending?.code.orEmpty())
                         }
-                        else -> Text("Waiting for\nRemote", style = AfarType.Title, color = AfarColors.Paper)
+                        else -> {
+                            Text("Waiting for\nRemote", style = AfarType.Title, color = AfarColors.Paper)
+                            VSpace(6.dp)
+                            Text("Shown as $deviceName", style = AfarType.Caption, color = AfarColors.PaperDim)
+                        }
                     }
                 }
             }
@@ -469,9 +474,9 @@ private fun LockOverlay(dimmed: Boolean, onUnlock: () -> Unit) {
                     }
                 })
             },
-        contentAlignment = Alignment.BottomCenter,
+        contentAlignment = Alignment.Center,
     ) {
-        Column(Modifier.navigationBarsPadding().padding(bottom = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
                 Canvas(Modifier.fillMaxSize()) {
                     val sw = 2.dp.toPx()

@@ -135,7 +135,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
 }
 
 @Composable
-private fun Illustration(page: Int, modifier: Modifier) {
+internal fun Illustration(page: Int, modifier: Modifier) {
     val t = rememberInfiniteTransition(label = "illu")
     val phase by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart), label = "phase")
     val measurer = rememberTextMeasurer()
