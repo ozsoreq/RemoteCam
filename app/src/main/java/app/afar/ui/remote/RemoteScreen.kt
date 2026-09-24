@@ -66,6 +66,7 @@ import app.afar.AfarApp
 import app.afar.MainActivity
 import app.afar.net.LinkQuality
 import app.afar.session.LinkPhase
+import app.afar.session.WARNING_SECONDS
 import app.afar.ui.components.BatteryIndicator
 import app.afar.ui.components.CountdownNumeral
 import app.afar.ui.components.FocusReticle
@@ -474,7 +475,7 @@ private fun Thumbnail(image: android.graphics.Bitmap?, busy: Boolean, onClick: (
 /** "Still there?" — the Camera drops idle sessions; this gives a 10-second heads-up. */
 @Composable
 private fun IdleWarning(secondsLeft: Int, visible: Boolean, onKeepGoing: () -> Unit, modifier: Modifier = Modifier) {
-    val show = visible && secondsLeft in 0..app.afar.session.WARNING_SECONDS
+    val show = visible && secondsLeft in 0..WARNING_SECONDS
     AnimatedVisibility(
         show,
         modifier = modifier.padding(12.dp),

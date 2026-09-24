@@ -68,6 +68,7 @@ import app.afar.net.Connection
 import app.afar.net.Lens
 import app.afar.net.Role
 import app.afar.session.SessionService
+import app.afar.session.WARNING_SECONDS
 import app.afar.ui.components.CodeDigits
 import app.afar.ui.components.CountdownNumeral
 import app.afar.ui.components.EaseOutExpo
@@ -229,7 +230,7 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (!bound) NoticePill("Starting camera…", Tone.Warn, pulse = true)
-            if (connected && idleLeft in 0..app.afar.session.WARNING_SECONDS) {
+            if (connected && idleLeft in 0..WARNING_SECONDS) {
                 NoticePill("Disconnecting in ${idleLeft}s", Tone.Warn, pulse = true)
             }
             linkError?.let { NoticePill(it, Tone.Bad) }
