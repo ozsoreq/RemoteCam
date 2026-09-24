@@ -81,10 +81,18 @@ class SmokeTest {
             compose.onNodeWithText("I agree").performClick()
             assertTrue(prefs.getBoolean("consent", false))
 
-            // Nothing granted yet on a fresh emulator → permission screen
-            compose.screenshot("05_permissions")
-            compose.onNodeWithText("Permissions").assertIsDisplayed()
-            compose.onNodeWithText("Nearby devices").assertIsDisplayed()
+            // Permissions persist across tests on the same device: if another test already
+            // granted them, the app correctly skips straight to pairing.
+            val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+            val needsPermissions = with(app.afar.ui.permissions.PermissionsCheck) { ctx.missing(app.afar.net.Role.Remote) }
+            if (needsPermissions) {
+                compose.screenshot("05_permissions")
+                compose.onNodeWithText("Permissions").assertIsDisplayed()
+                compose.onNodeWithText("Nearby devices").assertIsDisplayed()
+            } else {
+                compose.screenshot("05_pairing")
+                compose.onNodeWithText("Finding\nCamera…").assertIsDisplayed()
+            }
         }
     }
 }

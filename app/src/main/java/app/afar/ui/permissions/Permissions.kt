@@ -47,3 +47,8 @@ fun Context.isGranted(permission: String) =
 
 fun Context.missingPermissions(role: Role): List<String> =
     permissionGroups(role).flatMap { it.permissions }.filterNot { isGranted(it) }
+
+/** Test-friendly entry point: does [role] still need any runtime permission? */
+object PermissionsCheck {
+    fun Context.missing(role: Role): Boolean = missingPermissions(role).isNotEmpty()
+}

@@ -85,10 +85,10 @@ jobs:
       - name: Screenshot thumbnails
         if: always()
         run: |
-          for f in screens/*.png; do
+          for f in screens/*.jpg; do
             [ -f "$f" ] || continue
             echo "=== SCREEN $f"
-            convert "$f" -resize 400x -quality 72 jpg:- | base64 -w 0
+            base64 -w 0 "$f"
             echo
           done
 
