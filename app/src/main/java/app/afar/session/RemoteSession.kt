@@ -96,6 +96,9 @@ class RemoteSession(
     val notices: SharedFlow<String> = _notices.asSharedFlow()
 
     private var lastPongAt = 0L
+
+    /** Set when the user deliberately disconnects, so pairing doesn't snap straight back. */
+    var suppressAutoConnect = false
     val peerName: String? get() = (link.connection.value as? Connection.Connected)?.peer?.name ?: prefs.lastPeerName
 
     /** Starts looking for Cameras; the last paired one is reconnected without asking. */

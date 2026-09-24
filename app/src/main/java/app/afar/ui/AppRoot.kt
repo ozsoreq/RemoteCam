@@ -51,8 +51,14 @@ fun AppRoot(app: AfarApp, activity: MainActivity) {
                 app.cameraSession.stop()
                 SessionService.stop(context)
             }
-            Screen.Remote -> app.remoteSession.stop()
-            Screen.RemotePairing -> if (to != Screen.Remote) {
+            Screen.Remote -> {
+                app.remoteSession.stop()
+                app.remoteSession.suppressAutoConnect = true
+            }
+            Screen.RemotePairing -> if (to == Screen.Remote) {
+                app.remoteSession.suppressAutoConnect = false
+            } else {
+                app.remoteSession.suppressAutoConnect = false
                 app.link.stopAll()
                 SessionService.stop(context)
             }

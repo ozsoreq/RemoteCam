@@ -90,7 +90,7 @@ fun RemotePairingScreen(app: AfarApp, onConnected: () -> Unit, onBack: () -> Uni
     }
     // One-tap reconnect to the phone we paired with last time.
     LaunchedEffect(discovered, connection) {
-        if (connection !is Connection.None) return@LaunchedEffect
+        if (connection !is Connection.None || app.remoteSession.suppressAutoConnect) return@LaunchedEffect
         discovered.firstOrNull { it.role == Role.Camera && it.installId == app.prefs.lastPeerId }?.let {
             app.remoteSession.connect(it)
         }
