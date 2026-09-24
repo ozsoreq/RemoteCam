@@ -31,6 +31,26 @@ on reconnect), low-battery warning (<10 %) and preview auto-stop (<5 %), heat �
 storage-full blocks the shutter before you pose, paused session on incoming calls, and a
 single permission screen with an "Open settings" fallback.
 
+## Safe mode (on by default)
+
+A remote camera can be misused as a hidden camera, so Afar ships with guardrails that make
+that hard and make intent visible. Configure in **Settings**.
+
+| Guardrail | Behaviour |
+|---|---|
+| Responsible-use agreement | Shown once before the first session; re-readable from Settings. |
+| Camera-side approval | A new Remote connects only after **Allow** is tapped on the Camera phone (code shown on both). Only the Remote already in session may silently reconnect after a short drop. |
+| Auto-disconnect | The **Camera** drops the session after X s without a Remote command (default 60 s; 30 s – 10 min). The Remote gets a 10 s "Keep going" warning. Enforced on the Camera, using the stricter of both phones' settings. Can't be turned off in safe mode. |
+| No silent resume | After a timeout the Camera stops advertising and the Remote doesn't retry; someone must tap **Start again** on the Camera phone. |
+| LIVE sign | A red LIVE badge with the Remote's name is always on the Camera screen, above the dim and lock overlays. |
+| Audible cues | Chime on the Camera when a Remote connects or the session ends; countdown and shutter beeps can't be muted. |
+| Visible only in foreground | The Camera pauses when the app isn't on screen; photos can't be taken in the background. |
+| Local only | No accounts, no uploads; photos exist only on the two phones. |
+
+This is product-level risk reduction, not legal advice — have a lawyer review the store
+listing, privacy policy and terms before launch (Play requires a privacy policy for apps
+using the camera).
+
 ## Design
 
 Dark "ink" surfaces, soft off-white type and one blue accent (sky → azure)

@@ -76,6 +76,8 @@ import app.afar.ui.components.Glass
 import app.afar.ui.components.GlassIconButton
 import app.afar.ui.components.HSpace
 import app.afar.ui.components.NoticePill
+import app.afar.ui.components.PrimaryButton
+import app.afar.ui.components.SecondaryButton
 import app.afar.ui.components.Overline
 import app.afar.ui.components.StatusDot
 import app.afar.ui.components.Tone
@@ -101,6 +103,9 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
     val flash by session.captureFlash.collectAsState()
     val lastSaved by session.lastSaved.collectAsState()
     val bound by session.controller.bound.collectAsState()
+    val idleLeft by session.idleLeft.collectAsState()
+    val ended by session.ended.collectAsState()
+    val safeMode = remember { app.prefs.safeMode }
 
     var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var dimmed by remember { mutableStateOf(false) }
@@ -213,10 +218,6 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
         ) {
             GlassIconButton(AfarIcons.Close, "Leave", onExit)
             HSpace(10.dp)
-            AnimatedVisibility(connected, enter = fadeIn(), exit = fadeOut()) {
-                val name = (connection as? Connection.Connected)?.peer?.name.orEmpty()
-                NoticePill("Connected to $name", Tone.Good)
-            }
             Box(Modifier.weight(1f))
             GlassIconButton(AfarIcons.Lock, "Lock screen", { locked = true })
         }
@@ -228,6 +229,9 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (!bound) NoticePill("Starting camera…", Tone.Warn, pulse = true)
+            if (connected && idleLeft in 0..app.afar.session.WARNING_SECONDS) {
+                NoticePill("Disconnecting in ${idleLeft}s", Tone.Warn, pulse = true)
+            }
             linkError?.let { NoticePill(it, Tone.Bad) }
             SavedToast(lastSaved)
         }
@@ -242,7 +246,11 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
             WaitingCard(
                 deviceName = app.link.deviceName,
                 advertising = advertising,
-                code = (connection as? Connection.Pending)?.code?.takeIf { it.isNotEmpty() },
+                pending = (connection as? Connection.Pending)?.takeIf { it.code.isNotEmpty() },
+                ended = ended,
+                onAccept = session::acceptRemote,
+                onDecline = session::declineRemote,
+                onRestart = session::restart,
             )
         }
 
@@ -263,7 +271,7 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.94f))
+                    .background(Color.Black.copy(alpha = if (safeMode) 0.86f else 0.94f))
                     .pointerInput(Unit) { detectTapGestures { lastTouch = System.currentTimeMillis() } },
                 contentAlignment = Alignment.Center,
             ) {
@@ -278,6 +286,17 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
         // Lock overlay: swallows every touch; hold to unlock.
         AnimatedVisibility(locked, enter = fadeIn(), exit = fadeOut()) {
             LockOverlay(dimmed = dimmed, onUnlock = { locked = false; lastTouch = System.currentTimeMillis() })
+        }
+
+        // LIVE indicator sits above every overlay (dim, lock): anyone near this phone can
+        // always see it is being viewed remotely. Safe mode keeps it on; it can't be hidden.
+        AnimatedVisibility(
+            connected && (safeMode || !dimmed),
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 14.dp),
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            LiveBadge((connection as? Connection.Connected)?.peer?.name.orEmpty())
         }
     }
 }
@@ -304,30 +323,89 @@ private fun SavedToast(lastSaved: Long?) {
 }
 
 @Composable
-private fun WaitingCard(deviceName: String, advertising: Boolean, code: String?) {
+private fun LiveBadge(remoteName: String) {
+    Glass(shape = CircleShape, tint = Color.Black.copy(alpha = 0.55f)) {
+        Row(Modifier.padding(start = 8.dp, end = 16.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            StatusDot(AfarColors.Danger, pulse = true, dotSize = 7.dp)
+            Text("LIVE", style = AfarType.Overline, color = AfarColors.Paper)
+            if (remoteName.isNotEmpty()) {
+                Text("  ·  $remoteName", style = AfarType.Caption, color = AfarColors.PaperDim, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaitingCard(
+    deviceName: String,
+    advertising: Boolean,
+    pending: Connection.Pending?,
+    ended: String?,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    onRestart: () -> Unit,
+) {
+    val stage = when {
+        ended != null -> 3
+        pending != null && !pending.accepted -> 2
+        pending != null -> 1
+        else -> 0
+    }
     Glass(
         Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),
         shape = RoundedCornerShape(32.dp),
-        tint = AfarColors.Ink2.copy(alpha = 0.82f),
+        tint = AfarColors.Ink2.copy(alpha = 0.86f),
     ) {
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusDot(if (advertising || code != null) AfarColors.Mint else AfarColors.Amber, pulse = true, dotSize = 7.dp)
-                Overline(if (code != null) "Remote found" else if (advertising) "Ready" else "Starting…", color = AfarColors.PaperDim)
+                StatusDot(
+                    when (stage) {
+                        3 -> AfarColors.PaperFaint
+                        0 -> if (advertising) AfarColors.Mint else AfarColors.Amber
+                        else -> AfarColors.Sky
+                    },
+                    pulse = stage != 3,
+                    dotSize = 7.dp,
+                )
+                Overline(
+                    when (stage) {
+                        3 -> "Stopped · hidden"
+                        2 -> pending?.peer?.name ?: "Remote"
+                        1 -> "Connecting"
+                        else -> if (advertising) "Visible as “$deviceName”" else "Starting…"
+                    },
+                    color = AfarColors.PaperDim,
+                )
             }
             VSpace(10.dp)
-            AnimatedContent(code, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "code") { c ->
-                if (c == null) {
-                    Column {
-                        Text("Waiting for\nRemote", style = AfarType.Title, color = AfarColors.Paper)
-                        VSpace(8.dp)
-                        Text("Visible as “$deviceName”", style = AfarType.Body, color = AfarColors.PaperDim)
-                    }
-                } else {
-                    Column {
-                        Text("Same code?", style = AfarType.TitleSmall, color = AfarColors.Paper)
-                        VSpace(18.dp)
-                        CodeDigits(c)
+            AnimatedContent(stage, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "stage") { st ->
+                Column {
+                    when (st) {
+                        3 -> {
+                            Text("Session\nended", style = AfarType.Title, color = AfarColors.Paper)
+                            VSpace(8.dp)
+                            Text(ended.orEmpty(), style = AfarType.Body, color = AfarColors.PaperDim)
+                            VSpace(20.dp)
+                            PrimaryButton("Start again", onRestart, icon = AfarIcons.Retake)
+                        }
+                        2 -> {
+                            Text("Allow this Remote?", style = AfarType.TitleSmall, color = AfarColors.Paper)
+                            VSpace(4.dp)
+                            Text("Only if the code matches.", style = AfarType.Caption, color = AfarColors.PaperDim)
+                            VSpace(16.dp)
+                            CodeDigits(pending?.code.orEmpty())
+                            VSpace(20.dp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                SecondaryButton("Decline", onDecline, Modifier.weight(1f))
+                                PrimaryButton("Allow", onAccept, Modifier.weight(1f), icon = AfarIcons.Check)
+                            }
+                        }
+                        1 -> {
+                            Text("Same code?", style = AfarType.TitleSmall, color = AfarColors.Paper)
+                            VSpace(18.dp)
+                            CodeDigits(pending?.code.orEmpty())
+                        }
+                        else -> Text("Waiting for\nRemote", style = AfarType.Title, color = AfarColors.Paper)
                     }
                 }
             }

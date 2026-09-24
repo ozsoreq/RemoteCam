@@ -49,6 +49,8 @@ sealed interface LinkPhase {
     /** Link dropped; retrying for up to 30 s. [secondsLeft] counts down for the UI. */
     data class Reconnecting(val secondsLeft: Int) : LinkPhase
     data object Lost : LinkPhase
+    /** The Camera closed the session on purpose (idle timeout / stopped there). No reconnect. */
+    data class Ended(val reason: String) : LinkPhase
 }
 
 /**
@@ -122,7 +124,7 @@ class RemoteSession(
             prefs.lastPeerId = it.installId
             prefs.lastPeerName = it.name
         }
-        link.send(Cmd.Hello(link.deviceName))
+        link.send(Cmd.Hello(link.deviceName, prefs.effectiveIdleTimeout))
 
         s.launch { link.commands.collect { onCommand(it) } }
         s.launch {
@@ -239,6 +241,11 @@ class RemoteSession(
         }
     }
 
+    /** "Keep going" on the idle warning: counts as activity on the Camera. */
+    fun keepAlive() {
+        link.send(Cmd.KeepAlive)
+    }
+
     fun retryConnection() {
         beginReconnect()
     }
@@ -270,6 +277,14 @@ class RemoteSession(
                 }
             }
             is Cmd.Captured -> _awaitingPhoto.value = true
+            is Cmd.SessionEnded -> {
+                reconnectJob?.cancel()
+                _countdown.value = null
+                _queuedShutter.value = null
+                _phase.value = LinkPhase.Ended(cmd.reason)
+                // The Camera may be mid-disconnect already; make sure we don't linger or retry.
+                link.disconnect()
+            }
             is Cmd.ShutterRejected -> {
                 _countdown.value = null
                 _awaitingPhoto.value = false
@@ -321,7 +336,7 @@ class RemoteSession(
         reconnectJob?.cancel()
         link.stopDiscovery()
         _phase.value = LinkPhase.Live
-        link.send(Cmd.Hello(link.deviceName))
+        link.send(Cmd.Hello(link.deviceName, prefs.effectiveIdleTimeout))
         _queuedShutter.value?.let { timer ->
             _queuedShutter.value = null
             link.send(Cmd.Shutter(timer, prefs.burst))

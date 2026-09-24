@@ -105,11 +105,16 @@ data class CameraStatus(
     val lowPower: Boolean = false,
     val burst: Boolean = true,
     val fps: Int = 0,
+    /** Seconds until the Camera drops an idle session; -1 = no timeout running. */
+    val idleLeft: Int = -1,
+    val safeMode: Boolean = true,
 )
 
 sealed interface Cmd {
     // Remote → Camera
-    data class Hello(val name: String) : Cmd
+    /** [idleTimeout] = the Remote's own auto-disconnect setting; the Camera enforces the stricter one. */
+    data class Hello(val name: String, val idleTimeout: Int) : Cmd
+    data object KeepAlive : Cmd
     data class Shutter(val timer: Int, val burst: Boolean) : Cmd
     data object CancelCountdown : Cmd
     data class SetLens(val lens: Lens) : Cmd
@@ -124,9 +129,12 @@ sealed interface Cmd {
     data class Captured(val id: String) : Cmd
     data class ShutterRejected(val reason: String) : Cmd
     data class Deleted(val id: String) : Cmd
+    /** The Camera closed the session (idle timeout or its user tapped stop); don't auto-reconnect. */
+    data class SessionEnded(val reason: String) : Cmd
 
     fun toJson(): JSONObject = when (this) {
-        is Hello -> obj("hello").put("name", name)
+        is Hello -> obj("hello").put("name", name).put("idle", idleTimeout)
+        KeepAlive -> obj("alive")
         is Shutter -> obj("shutter").put("timer", timer).put("burst", burst)
         CancelCountdown -> obj("cancel")
         is SetLens -> obj("lens").put("lens", lens.wire)
@@ -138,19 +146,22 @@ sealed interface Cmd {
             put("sto", status.storageOk); put("lens", status.lens.wire)
             put("lenses", JSONArray(status.lenses.map { it.wire })); put("paused", status.previewPaused)
             put("lowp", status.lowPower); put("burst", status.burst); put("fps", status.fps)
+            put("idleLeft", status.idleLeft); put("safe", status.safeMode)
         }
         is Pong -> obj("pong").put("ts", ts)
         is Countdown -> obj("count").put("n", remaining)
         is Captured -> obj("captured").put("id", id)
         is ShutterRejected -> obj("rejected").put("reason", reason)
         is Deleted -> obj("deleted").put("id", id)
+        is SessionEnded -> obj("ended").put("reason", reason)
     }
 
     companion object {
         private fun obj(type: String) = JSONObject().put("t", type)
 
         fun fromJson(o: JSONObject): Cmd? = when (o.optString("t")) {
-            "hello" -> Hello(o.optString("name"))
+            "hello" -> Hello(o.optString("name"), o.optInt("idle", 0))
+            "alive" -> KeepAlive
             "shutter" -> Shutter(o.optInt("timer"), o.optBoolean("burst", true))
             "cancel" -> CancelCountdown
             "lens" -> SetLens(Lens.from(o.optString("lens")))
@@ -170,6 +181,8 @@ sealed interface Cmd {
                     lowPower = o.optBoolean("lowp"),
                     burst = o.optBoolean("burst", true),
                     fps = o.optInt("fps"),
+                    idleLeft = o.optInt("idleLeft", -1),
+                    safeMode = o.optBoolean("safe", true),
                 ),
             )
             "pong" -> Pong(o.optLong("ts"))
@@ -177,6 +190,7 @@ sealed interface Cmd {
             "captured" -> Captured(o.optString("id"))
             "rejected" -> ShutterRejected(o.optString("reason"))
             "deleted" -> Deleted(o.optString("id"))
+            "ended" -> SessionEnded(o.optString("reason"))
             else -> null
         }
     }

@@ -27,6 +27,8 @@ import app.afar.ui.pairing.RemotePairingScreen
 import app.afar.ui.permissions.PermissionScreen
 import app.afar.ui.permissions.missingPermissions
 import app.afar.ui.remote.RemoteScreen
+import app.afar.ui.settings.ConsentScreen
+import app.afar.ui.settings.SettingsScreen
 import app.afar.ui.theme.AfarColors
 
 sealed interface Screen {
@@ -36,6 +38,9 @@ sealed interface Screen {
     data object Camera : Screen
     data object RemotePairing : Screen
     data object Remote : Screen
+    data object Settings : Screen
+    /** [then] = role waiting on the agreement; null = read-only from Settings. */
+    data class Consent(val then: Role?) : Screen
 }
 
 @Composable
@@ -70,6 +75,7 @@ fun AppRoot(app: AfarApp, activity: MainActivity) {
     fun startRole(role: Role) {
         app.prefs.lastRole = role
         navigate(when {
+            !app.prefs.consented -> Screen.Consent(role)
             context.missingPermissions(role).isNotEmpty() -> Screen.Permissions(role)
             role == Role.Camera -> Screen.Camera
             else -> Screen.RemotePairing
@@ -77,7 +83,13 @@ fun AppRoot(app: AfarApp, activity: MainActivity) {
     }
 
     BackHandler(enabled = screen != Screen.Home && screen != Screen.Onboarding) {
-        navigate(if (screen == Screen.Remote) Screen.RemotePairing else Screen.Home)
+        navigate(
+            when (val s = screen) {
+                Screen.Remote -> Screen.RemotePairing
+                is Screen.Consent -> if (s.then == null) Screen.Settings else Screen.Home
+                else -> Screen.Home
+            },
+        )
     }
 
     AnimatedContent(
@@ -97,6 +109,21 @@ fun AppRoot(app: AfarApp, activity: MainActivity) {
                 lastRole = app.prefs.lastRole,
                 onPick = ::startRole,
                 onHowItWorks = { navigate(Screen.Onboarding) },
+                onSettings = { navigate(Screen.Settings) },
+            )
+            Screen.Settings -> SettingsScreen(
+                app.prefs,
+                onBack = { navigate(Screen.Home) },
+                onResponsibleUse = { navigate(Screen.Consent(null)) },
+            )
+            is Screen.Consent -> ConsentScreen(
+                onAgree = s.then?.let { role ->
+                    {
+                        app.prefs.consented = true
+                        startRole(role)
+                    }
+                },
+                onBack = { navigate(if (s.then == null) Screen.Settings else Screen.Home) },
             )
             is Screen.Permissions -> PermissionScreen(
                 role = s.role,

@@ -241,7 +241,7 @@ private fun CodeSheet(connection: Connection, onConfirm: () -> Unit, onCancel: (
                         Text("Connecting…", style = AfarType.Title, color = AfarColors.Paper)
                         VSpace(8.dp)
                         Text(
-                            if (p.code.isEmpty()) "Reaching the Camera" else "Code ${p.code}",
+                            if (p.code.isEmpty()) "Reaching the Camera" else "Tap Allow on the Camera",
                             style = AfarType.Body,
                             color = AfarColors.PaperDim,
                             textAlign = TextAlign.Center,

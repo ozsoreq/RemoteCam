@@ -116,6 +116,16 @@ object AfarIcons {
         moveTo(5.5f, 18.5f); lineTo(6.8f, 17.2f)
         moveTo(17.2f, 6.8f); lineTo(18.5f, 5.5f)
     }
+    val Shield = icon("shield") {
+        moveTo(12f, 3f)
+        lineTo(19.5f, 6f)
+        lineTo(19.5f, 11.5f)
+        curveTo(19.5f, 16f, 16.3f, 19.6f, 12f, 21f)
+        curveTo(7.7f, 19.6f, 4.5f, 16f, 4.5f, 11.5f)
+        lineTo(4.5f, 6f)
+        close()
+        moveTo(8.8f, 12f); lineTo(11.1f, 14.3f); lineTo(15.4f, 9.8f)
+    }
     val Settings = icon("settings") {
         moveTo(4f, 7f); lineTo(14f, 7f); moveTo(18f, 7f); lineTo(20f, 7f)
         circle(16f, 7f, 2f)

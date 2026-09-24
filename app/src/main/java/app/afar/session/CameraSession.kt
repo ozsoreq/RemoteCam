@@ -45,6 +45,14 @@ import kotlin.math.max
  * Lives in application scope (not a screen) so a link drop mid-countdown still captures,
  * saves, and syncs the photo once the Remote reconnects.
  */
+const val WARNING_SECONDS = 10
+
+fun formatDuration(seconds: Int): String = when {
+    seconds <= 0 -> "Off"
+    seconds % 60 == 0 -> "${seconds / 60} min"
+    else -> "$seconds s"
+}
+
 class CameraSession(
     private val context: Context,
     private val link: NearbyLink,
@@ -71,6 +79,19 @@ class CameraSession(
     private val _lastSaved = MutableStateFlow<Long?>(null)
     val lastSaved: StateFlow<Long?> = _lastSaved.asStateFlow()
 
+    private val _idleLeft = MutableStateFlow(-1)
+    /** Seconds until an idle session is dropped; -1 when no timeout is running. */
+    val idleLeft: StateFlow<Int> = _idleLeft.asStateFlow()
+
+    private val _ended = MutableStateFlow<String?>(null)
+    /** Why the last session ended; while non-null the Camera stays hidden until restarted. */
+    val ended: StateFlow<String?> = _ended.asStateFlow()
+
+    /** Remote currently in session; only it may silently reconnect after a short drop. */
+    private var sessionRemoteId: String? = null
+    private var remoteIdleTimeout = 0
+    private var lastActivity = 0L
+
     private var countdownJob: Job? = null
     private val pendingPhotos = ArrayDeque<Pair<PhotoHeader, ByteArray>>()
     private val shots = mutableMapOf<String, Uri>()
@@ -89,7 +110,12 @@ class CameraSession(
         if (scope != null) return
         val s = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = s
-        link.autoAccept = { peer, _ -> peer.role == Role.Remote }
+        // Safe mode: a new Remote needs an explicit Accept on this phone. Only the Remote
+        // already in session may reconnect silently after a short drop.
+        link.autoAccept = { peer, _ ->
+            peer.role == Role.Remote && (!prefs.safeMode || peer.installId == sessionRemoteId)
+        }
+        _ended.value = null
         link.startAdvertising(Role.Camera)
         level.start()
         controller.frameSink = ::onFrame
@@ -100,12 +126,18 @@ class CameraSession(
                 when (c) {
                     is Connection.Connected -> {
                         link.stopAdvertising()
+                        if (sessionRemoteId != c.peer.installId && prefs.safeMode) beeper.chime(up = true)
+                        sessionRemoteId = c.peer.installId
                         prefs.lastPeerId = c.peer.installId
                         prefs.lastPeerName = c.peer.name
+                        lastActivity = SystemClock.elapsedRealtime()
                         sendStatus()
                         flushPhotos()
                     }
-                    Connection.None -> link.startAdvertising(Role.Camera)
+                    Connection.None -> {
+                        _idleLeft.value = -1
+                        if (_ended.value == null) link.startAdvertising(Role.Camera)
+                    }
                     is Connection.Pending -> Unit
                 }
             }
@@ -120,15 +152,77 @@ class CameraSession(
             }
         }
         s.launch {
+            var tick = 0
             while (isActive) {
-                sendStatus()
-                delay(2_000)
+                val warning = checkIdle()
+                // Normally every 2 s; every second while the "disconnecting in…" warning runs.
+                if (warning || tick % 2 == 0) sendStatus()
+                tick++
+                delay(1_000)
             }
         }
     }
 
-    fun stop() {
+    /** Stricter of this phone's and the Remote's auto-disconnect settings (0 = off). */
+    private val idleTimeout: Int
+        get() = listOf(prefs.effectiveIdleTimeout, remoteIdleTimeout).filter { it > 0 }.minOrNull() ?: 0
+
+    /** Drops the session after [idleTimeout] s without a Remote command. Returns true while warning. */
+    private fun checkIdle(): Boolean {
+        val timeout = idleTimeout
+        if (link.connection.value !is Connection.Connected || timeout <= 0) {
+            _idleLeft.value = -1
+            return false
+        }
+        // A running countdown or capture is activity.
+        if (countdownJob?.isActive == true || _saving.value) lastActivity = SystemClock.elapsedRealtime()
+        val left = timeout - ((SystemClock.elapsedRealtime() - lastActivity) / 1000).toInt()
+        _idleLeft.value = left.coerceAtLeast(0)
+        if (left <= 0) {
+            endSession("Ended after ${formatDuration(timeout)} without activity")
+            return false
+        }
+        return left <= WARNING_SECONDS
+    }
+
+    /**
+     * Closes the session from the Camera side: tells the Remote not to reconnect, drops the
+     * link and stops advertising until someone restarts it on this phone.
+     */
+    fun endSession(reason: String) {
+        val s = scope ?: return
         countdownJob?.cancel()
+        _countdown.value = null
+        _idleLeft.value = -1
+        _ended.value = reason
+        sessionRemoteId = null
+        remoteIdleTimeout = 0
+        link.stopAdvertising()
+        link.send(Cmd.SessionEnded(reason))
+        if (prefs.safeMode) beeper.chime(up = false)
+        s.launch {
+            delay(400) // let the goodbye reach the Remote
+            link.disconnect()
+        }
+    }
+
+    /** Makes the Camera discoverable again after a session ended. */
+    fun restart() {
+        _ended.value = null
+        link.startAdvertising(Role.Camera)
+    }
+
+    fun acceptRemote() = link.acceptPending()
+
+    fun declineRemote() = link.rejectPending()
+
+    fun stop() {
+        // Best effort: tell the Remote this was deliberate so it doesn't try to reconnect.
+        if (link.connection.value is Connection.Connected) link.send(Cmd.SessionEnded("The Camera was closed"))
+        countdownJob?.cancel()
+        sessionRemoteId = null
+        remoteIdleTimeout = 0
+        _idleLeft.value = -1
         scope?.cancel()
         scope = null
         controller.frameSink = null
@@ -139,7 +233,10 @@ class CameraSession(
     }
 
     private fun onCommand(cmd: Cmd) {
+        if (cmd !is Cmd.Ping) lastActivity = SystemClock.elapsedRealtime()
         when (cmd) {
+            is Cmd.Hello -> remoteIdleTimeout = cmd.idleTimeout
+            Cmd.KeepAlive -> Unit
             is Cmd.Shutter -> shutter(cmd.timer, cmd.burst)
             Cmd.CancelCountdown -> cancelCountdown()
             is Cmd.SetLens -> controller.setLens(cmd.lens)
@@ -254,6 +351,8 @@ class CameraSession(
                     previewPaused = !controller.bound.value || controller.paused,
                     lowPower = lowPower,
                     fps = fps,
+                    idleLeft = _idleLeft.value,
+                    safeMode = prefs.safeMode,
                 ),
             ),
         )

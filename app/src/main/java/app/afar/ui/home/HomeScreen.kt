@@ -61,7 +61,7 @@ import app.afar.ui.theme.AfarType
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
-fun HomeScreen(lastRole: Role?, onPick: (Role) -> Unit, onHowItWorks: () -> Unit) {
+fun HomeScreen(lastRole: Role?, onPick: (Role) -> Unit, onHowItWorks: () -> Unit, onSettings: () -> Unit) {
     var sharing by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
@@ -81,6 +81,8 @@ fun HomeScreen(lastRole: Role?, onPick: (Role) -> Unit, onHowItWorks: () -> Unit
                 )
                 Box(Modifier.weight(1f))
                 GlassIconButton(AfarIcons.Info, "How it works", onHowItWorks)
+                HSpace(8.dp)
+                GlassIconButton(AfarIcons.Settings, "Settings", onSettings)
             }
 
             Box(Modifier.weight(1f))

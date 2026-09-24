@@ -50,7 +50,29 @@ class Prefs(context: Context) {
         get() = sp.getInt("timer", 3)
         set(value) = sp.edit { putInt("timer", value) }
 
-    private companion object {
-        const val KEY_INSTALL = "install"
+    /** Safe mode: Camera-side approval, visible LIVE indicator, enforced auto-disconnect. */
+    var safeMode: Boolean
+        get() = sp.getBoolean("safe", true)
+        set(value) = sp.edit { putBoolean("safe", value) }
+
+    /** Seconds without a Remote command before the link drops; 0 = never (only outside safe mode). */
+    var idleTimeoutSec: Int
+        get() = sp.getInt("idle", DEFAULT_IDLE)
+        set(value) = sp.edit { putInt("idle", value) }
+
+    /** The timeout actually enforced: safe mode never allows "off". */
+    val effectiveIdleTimeout: Int
+        get() = idleTimeoutSec.let { if (safeMode && it <= 0) DEFAULT_IDLE else it }
+
+    /** User agreed to the responsible-use terms. */
+    var consented: Boolean
+        get() = sp.getBoolean("consent", false)
+        set(value) = sp.edit { putBoolean("consent", value) }
+
+    companion object {
+        const val DEFAULT_IDLE = 60
+        val IDLE_CHOICES = listOf(30, 60, 120, 300, 600, 0)
+
+        private const val KEY_INSTALL = "install"
     }
 }

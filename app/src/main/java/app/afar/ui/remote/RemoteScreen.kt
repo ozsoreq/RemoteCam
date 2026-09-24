@@ -248,6 +248,12 @@ fun RemoteScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
                     }
 
                     ReconnectVeil(phase, onRetry = session::retryConnection, onExit = onExit)
+                    IdleWarning(
+                        secondsLeft = status?.idleLeft ?: -1,
+                        visible = phase is LinkPhase.Live,
+                        onKeepGoing = session::keepAlive,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                 }
             }
 
@@ -279,7 +285,7 @@ fun RemoteScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
                 ShutterButton(
                     counting = counting,
                     progress = countdown?.let { 1f - it.toFloat() / timer.coerceAtLeast(1) } ?: 0f,
-                    enabled = phase !is LinkPhase.Lost && status?.storageOk != false,
+                    enabled = phase is LinkPhase.Live || phase is LinkPhase.Reconnecting,
                     queued = queued != null,
                     onClick = shoot,
                 )
@@ -326,6 +332,7 @@ private fun LinkPill(name: String, phase: LinkPhase, bars: Int, rtt: Long?, qual
                 LinkPhase.Live -> AfarColors.Mint to false
                 is LinkPhase.Reconnecting -> AfarColors.Amber to true
                 LinkPhase.Lost -> AfarColors.Danger to false
+                is LinkPhase.Ended -> AfarColors.PaperFaint to false
                 LinkPhase.Idle -> AfarColors.PaperFaint to true
             }
             StatusDot(color, pulse = pulse, dotSize = 7.dp)
@@ -335,6 +342,7 @@ private fun LinkPill(name: String, phase: LinkPhase, bars: Int, rtt: Long?, qual
                         LinkPhase.Live -> name
                         is LinkPhase.Reconnecting -> "Reconnecting… ${p.secondsLeft}s"
                         LinkPhase.Lost -> "Connection lost"
+                        is LinkPhase.Ended -> "Session ended"
                         LinkPhase.Idle -> "Connecting…"
                     },
                     style = AfarType.Label,
@@ -400,10 +408,18 @@ private fun WaitingForFrames(modifier: Modifier, paused: Boolean) {
 
 @Composable
 private fun ReconnectVeil(phase: LinkPhase, onRetry: () -> Unit, onExit: () -> Unit) {
-    AnimatedVisibility(phase is LinkPhase.Reconnecting || phase == LinkPhase.Lost, enter = fadeIn(), exit = fadeOut()) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+    AnimatedVisibility(phase !is LinkPhase.Live && phase != LinkPhase.Idle, enter = fadeIn(), exit = fadeOut()) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
             Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (phase == LinkPhase.Lost) {
+                if (phase is LinkPhase.Ended) {
+                    Text("Session ended", style = AfarType.Title, color = AfarColors.Paper, textAlign = TextAlign.Center)
+                    VSpace(8.dp)
+                    Text(phase.reason, style = AfarType.Body, color = AfarColors.PaperDim, textAlign = TextAlign.Center)
+                    VSpace(4.dp)
+                    Text("Restart it on the Camera phone.", style = AfarType.Caption, color = AfarColors.PaperFaint, textAlign = TextAlign.Center)
+                    VSpace(22.dp)
+                    SecondaryButton("Back to pairing", onExit, Modifier.fillMaxWidth())
+                } else if (phase == LinkPhase.Lost) {
                     Text("Lost the Camera", style = AfarType.Title, color = AfarColors.Paper, textAlign = TextAlign.Center)
                     VSpace(8.dp)
                     Text("Move closer. Photos are safe.", style = AfarType.Body, color = AfarColors.PaperDim, textAlign = TextAlign.Center)
@@ -450,6 +466,37 @@ private fun Thumbnail(image: android.graphics.Bitmap?, busy: Boolean, onClick: (
                     size = Size(size.width - 2 * sw, size.height - 2 * sw),
                     style = Stroke(sw, cap = StrokeCap.Round),
                 )
+            }
+        }
+    }
+}
+
+/** "Still there?" — the Camera drops idle sessions; this gives a 10-second heads-up. */
+@Composable
+private fun IdleWarning(secondsLeft: Int, visible: Boolean, onKeepGoing: () -> Unit, modifier: Modifier = Modifier) {
+    val show = visible && secondsLeft in 0..app.afar.session.WARNING_SECONDS
+    AnimatedVisibility(
+        show,
+        modifier = modifier.padding(12.dp),
+        enter = fadeIn() + scaleIn(initialScale = 0.9f),
+        exit = fadeOut(),
+    ) {
+        Glass(shape = RoundedCornerShape(24.dp), tint = AfarColors.Ink2.copy(alpha = 0.92f)) {
+            Row(Modifier.padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(AfarColors.Amber, pulse = true, dotSize = 7.dp)
+                Text("Disconnecting in ${secondsLeft.coerceAtLeast(0)}s", style = AfarType.Label, color = AfarColors.Paper)
+                HSpace(12.dp)
+                Box(
+                    Modifier
+                        .height(40.dp)
+                        .clip(CircleShape)
+                        .background(AfarColors.AccentBrush)
+                        .pressable(onClick = onKeepGoing)
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Keep going", style = AfarType.Label, color = AfarColors.Ink)
+                }
             }
         }
     }

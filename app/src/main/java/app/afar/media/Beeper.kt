@@ -27,6 +27,11 @@ class Beeper(context: Context) {
         tone?.startTone(ToneGenerator.TONE_PROP_BEEP2, 260)
     }
 
+    /** Audible cue near the Camera when a Remote connects (up) or the session ends (down). */
+    fun chime(up: Boolean) {
+        tone?.startTone(if (up) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_NACK, 300)
+    }
+
     fun haptic(strong: Boolean = false) {
         val v = vibrator ?: return
         if (!v.hasVibrator()) return
