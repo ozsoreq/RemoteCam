@@ -33,12 +33,13 @@ single permission screen with an "Open settings" fallback.
 
 ## Design
 
-Dark "ink" surfaces, warm off-white type and one golden-hour accent (apricot → coral)
+Dark "ink" surfaces, soft off-white type and one blue accent (sky → azure)
 reserved for what matters: the shutter, the countdown and the active state. Titles and the
 countdown numerals use **Instrument Serif**; UI text uses **Manrope** (both SIL OFL, see
 `licenses/`). Controls are frosted-glass pills with hairline borders and spring-press
 feedback; icons are a custom 1.6-stroke set (`ui/icons/AfarIcons.kt`) so nothing looks
-stock.
+stock. Screens carry as little text as possible; explanations live in the first-run tutorial.
+The UI is English-only and always laid out left-to-right, including on RTL phones.
 
 ## Architecture
 

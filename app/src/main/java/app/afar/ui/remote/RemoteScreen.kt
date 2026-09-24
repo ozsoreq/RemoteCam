@@ -218,7 +218,7 @@ fun RemoteScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         CountdownNumeral(countdown)
                         AnimatedVisibility(counting, enter = fadeIn(), exit = fadeOut()) {
-                            Text("Hide the Remote · strike a pose", style = AfarType.Label, color = AfarColors.Paper)
+                            Text("Hide the Remote", style = AfarType.Label, color = AfarColors.Paper)
                         }
                     }
 
@@ -368,13 +368,13 @@ private fun Notices(
 ) {
     val items = buildList {
         if (status != null) {
-            if (status.lowPower) add("Camera battery critical — preview paused, shutter still works" to Tone.Bad)
+            if (status.lowPower) add("Camera battery critical · preview off" to Tone.Bad)
             else if (status.battery in 0 until 10 && !status.charging) add("Camera battery ${status.battery}%" to Tone.Bad)
             if (!status.storageOk) add("Camera storage full" to Tone.Bad)
-            if (status.hot) add("Camera phone is hot — preview slowed" to Tone.Warn)
-            if (status.previewPaused) add("Camera paused on the other phone" to Tone.Warn)
+            if (status.hot) add("Camera is hot · preview slowed" to Tone.Warn)
+            if (status.previewPaused) add("Camera paused" to Tone.Warn)
         }
-        if (bumped) add("Camera moved — check your framing" to Tone.Bad)
+        if (bumped) add("Camera moved" to Tone.Bad)
         if (lowQuality) add("Low quality preview" to Tone.Warn)
         if (queued) add("Shutter queued" to Tone.Accent)
         if (awaiting) add("Saving photo…" to Tone.Accent)
@@ -388,7 +388,7 @@ private fun WaitingForFrames(modifier: Modifier, paused: Boolean) {
     val t = rememberInfiniteTransition(label = "wait")
     val a by t.animateFloat(0.3f, 1f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse), label = "a")
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        StatusDot(AfarColors.Apricot, pulse = true, dotSize = 9.dp)
+        StatusDot(AfarColors.Sky, pulse = true, dotSize = 9.dp)
         VSpace(10.dp)
         Text(
             if (paused) "Preview paused" else "Waiting for the picture…",
@@ -406,12 +406,7 @@ private fun ReconnectVeil(phase: LinkPhase, onRetry: () -> Unit, onExit: () -> U
                 if (phase == LinkPhase.Lost) {
                     Text("Lost the Camera", style = AfarType.Title, color = AfarColors.Paper, textAlign = TextAlign.Center)
                     VSpace(8.dp)
-                    Text(
-                        "Walk a little closer. Any photo already taken is safe on the Camera and will sync when you reconnect.",
-                        style = AfarType.Body,
-                        color = AfarColors.PaperDim,
-                        textAlign = TextAlign.Center,
-                    )
+                    Text("Move closer. Photos are safe.", style = AfarType.Body, color = AfarColors.PaperDim, textAlign = TextAlign.Center)
                     VSpace(22.dp)
                     PrimaryButton("Try again", onRetry, icon = AfarIcons.Retake)
                     VSpace(10.dp)
@@ -421,7 +416,7 @@ private fun ReconnectVeil(phase: LinkPhase, onRetry: () -> Unit, onExit: () -> U
                     VSpace(14.dp)
                     Text("Reconnecting…", style = AfarType.TitleSmall, color = AfarColors.Paper)
                     VSpace(6.dp)
-                    Text("The Camera keeps running. Tap the shutter to queue a shot.", style = AfarType.Caption, color = AfarColors.PaperDim, textAlign = TextAlign.Center)
+                    Text("Tap the shutter to queue a shot", style = AfarType.Caption, color = AfarColors.PaperDim, textAlign = TextAlign.Center)
                 }
             }
         }
@@ -449,7 +444,7 @@ private fun Thumbnail(image: android.graphics.Bitmap?, busy: Boolean, onClick: (
             Canvas(Modifier.size(62.dp).graphicsLayer { rotationZ = spin }) {
                 val sw = 2.dp.toPx()
                 drawArc(
-                    Brush.sweepGradient(listOf(Color.Transparent, AfarColors.Apricot)),
+                    Brush.sweepGradient(listOf(Color.Transparent, AfarColors.Sky)),
                     0f, 300f, false,
                     topLeft = Offset(sw, sw),
                     size = Size(size.width - 2 * sw, size.height - 2 * sw),

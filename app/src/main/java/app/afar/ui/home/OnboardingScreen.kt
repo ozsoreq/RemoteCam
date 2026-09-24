@@ -61,9 +61,9 @@ import kotlin.math.absoluteValue
 private data class Panel(val step: String, val title: String, val body: String)
 
 private val panels = listOf(
-    Panel("01", "Two phones,\none camera.", "Open Afar on both. Choose Camera on one and Remote on the other — they find each other, no internet or accounts."),
-    Panel("02", "Frame yourself\nfrom afar.", "Prop the Camera on a rock or ledge. Walk into the shot and watch yourself live on the Remote, up to 30 m away."),
-    Panel("03", "Tap. Pose.\nDone.", "Tap the shutter, hide the Remote during the countdown, and strike a pose. The photo lands on both phones."),
+    Panel("01", "Two phones,\none camera.", "Open Afar on both. One is the Camera, the other the Remote. No internet needed."),
+    Panel("02", "Prop one.\nHold the other.", "Prop the Camera on a rock or ledge. Walk into the shot and watch yourself live."),
+    Panel("03", "Tap. Pose.\nDone.", "Tap the shutter, hide the Remote during the countdown. The photo lands on both phones."),
 )
 
 /** First-run, three-panel how-to with a hand-drawn illustration per step. */
@@ -100,7 +100,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Illustration(page, Modifier.size(260.dp))
                     }
-                    Overline("Step ${panels[page].step}", color = AfarColors.Apricot)
+                    Overline("Step ${panels[page].step}", color = AfarColors.Sky)
                     VSpace(12.dp)
                     Text(panels[page].title, style = AfarType.Title.copy(fontSize = AfarType.Title.fontSize * 1.15f), color = AfarColors.Paper)
                     VSpace(14.dp)
@@ -117,7 +117,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                             .height(6.dp)
                             .width(w)
                             .clip(CircleShape)
-                            .background(if (i == pager.currentPage) AfarColors.Apricot else AfarColors.PaperGhost),
+                            .background(if (i == pager.currentPage) AfarColors.Sky else AfarColors.PaperGhost),
                     )
                 }
             }
@@ -166,7 +166,7 @@ private fun DrawScope.twoPhones(phase: Float) {
         val p = (phase + i / 3f) % 1f
         val mid = Offset((far.x + near.x) / 2, (far.y + near.y) / 2)
         drawCircle(
-            AfarColors.Apricot.copy(alpha = (1 - p) * 0.55f),
+            AfarColors.Sky.copy(alpha = (1 - p) * 0.55f),
             radius = size.width * 0.05f + p * size.width * 0.16f,
             center = mid,
             style = Stroke(1.5.dp.toPx()),
@@ -197,12 +197,12 @@ private fun DrawScope.framing(phase: Float) {
     // the person, gently swaying into the thirds line
     val px = vx + vw * (0.62f + 0.05f * kotlin.math.sin(phase * 2 * Math.PI).toFloat())
     val headY = vy + vh * 0.5f
-    drawCircle(AfarColors.Apricot, radius = vw * 0.055f, center = Offset(px, headY))
-    drawLine(AfarColors.Apricot, Offset(px, headY + vw * 0.07f), Offset(px, headY + vw * 0.3f), 3.dp.toPx(), StrokeCap.Round)
-    drawLine(AfarColors.Apricot, Offset(px, headY + vw * 0.3f), Offset(px - vw * 0.06f, headY + vw * 0.46f), 3.dp.toPx(), StrokeCap.Round)
-    drawLine(AfarColors.Apricot, Offset(px, headY + vw * 0.3f), Offset(px + vw * 0.06f, headY + vw * 0.46f), 3.dp.toPx(), StrokeCap.Round)
-    drawLine(AfarColors.Apricot, Offset(px, headY + vw * 0.13f), Offset(px - vw * 0.08f, headY + vw * 0.02f), 3.dp.toPx(), StrokeCap.Round)
-    drawLine(AfarColors.Apricot, Offset(px, headY + vw * 0.13f), Offset(px + vw * 0.08f, headY + vw * 0.24f), 3.dp.toPx(), StrokeCap.Round)
+    drawCircle(AfarColors.Sky, radius = vw * 0.055f, center = Offset(px, headY))
+    drawLine(AfarColors.Sky, Offset(px, headY + vw * 0.07f), Offset(px, headY + vw * 0.3f), 3.dp.toPx(), StrokeCap.Round)
+    drawLine(AfarColors.Sky, Offset(px, headY + vw * 0.3f), Offset(px - vw * 0.06f, headY + vw * 0.46f), 3.dp.toPx(), StrokeCap.Round)
+    drawLine(AfarColors.Sky, Offset(px, headY + vw * 0.3f), Offset(px + vw * 0.06f, headY + vw * 0.46f), 3.dp.toPx(), StrokeCap.Round)
+    drawLine(AfarColors.Sky, Offset(px, headY + vw * 0.13f), Offset(px - vw * 0.08f, headY + vw * 0.02f), 3.dp.toPx(), StrokeCap.Round)
+    drawLine(AfarColors.Sky, Offset(px, headY + vw * 0.13f), Offset(px + vw * 0.08f, headY + vw * 0.24f), 3.dp.toPx(), StrokeCap.Round)
     // shutter
     drawCircle(Color.White.copy(0.9f), radius = w * 0.1f, center = Offset(center.x, tl.y + h - inset * 2.6f), style = Stroke(2.dp.toPx()))
     drawCircle(AfarColors.AccentBrush, radius = w * 0.075f, center = Offset(center.x, tl.y + h - inset * 2.6f))

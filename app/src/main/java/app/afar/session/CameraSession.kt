@@ -93,6 +93,7 @@ class CameraSession(
         link.startAdvertising(Role.Camera)
         level.start()
         controller.frameSink = ::onFrame
+        controller.onError = { link.send(Cmd.ShutterRejected(it)) }
 
         s.launch {
             link.connection.collect { c ->
@@ -110,6 +111,8 @@ class CameraSession(
             }
         }
         s.launch { link.commands.collect { onCommand(it) } }
+        // Tell the Remote right away when the lens actually changes (or falls back).
+        s.launch { controller.lens.collect { sendStatus() } }
         s.launch {
             while (isActive) {
                 controller.setDeviceRotation(level.quadrant)

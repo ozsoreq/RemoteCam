@@ -160,8 +160,8 @@ fun GlassIconButton(
     Glass(
         modifier.size(size).pressable(enabled = enabled, pressedScale = 0.88f, onClick = onClick),
         shape = CircleShape,
-        tint = if (active) AfarColors.Apricot.copy(alpha = 0.16f) else AfarColors.Glass,
-        border = if (active) Brush.linearGradient(listOf(AfarColors.Apricot.copy(0.7f), AfarColors.Coral.copy(0.3f))) else AfarColors.HairlineBrush,
+        tint = if (active) AfarColors.Sky.copy(alpha = 0.16f) else AfarColors.Glass,
+        border = if (active) Brush.linearGradient(listOf(AfarColors.Sky.copy(0.7f), AfarColors.Azure.copy(0.3f))) else AfarColors.HairlineBrush,
     ) {
         Icon(
             icon,
@@ -169,14 +169,14 @@ fun GlassIconButton(
             Modifier.align(Alignment.Center).size(size * 0.46f),
             tint = androidx.compose.ui.graphics.lerp(
                 if (enabled) AfarColors.Paper else AfarColors.PaperFaint,
-                AfarColors.Apricot,
+                AfarColors.Sky,
                 tint,
             ),
         )
     }
 }
 
-enum class Tone(val color: Color) { Neutral(AfarColors.Paper), Good(AfarColors.Mint), Warn(AfarColors.Amber), Bad(AfarColors.Danger), Accent(AfarColors.Apricot) }
+enum class Tone(val color: Color) { Neutral(AfarColors.Paper), Good(AfarColors.Mint), Warn(AfarColors.Amber), Bad(AfarColors.Danger), Accent(AfarColors.Sky) }
 
 /** Soft glowing status dot; pulses when [pulse] (e.g. while searching or reconnecting). */
 @Composable
@@ -214,7 +214,7 @@ fun NoticePill(text: String, tone: Tone, modifier: Modifier = Modifier, pulse: B
     }
 }
 
-/** Slow-drifting golden-hour glow behind the non-camera screens. */
+/** Slow-drifting blue glow behind the non-camera screens. */
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier, intensity: Float = 1f) {
     val t = rememberInfiniteTransition(label = "aurora")
@@ -228,9 +228,9 @@ fun AuroraBackground(modifier: Modifier = Modifier, intensity: Float = 1f) {
             radius = radius,
             center = center,
         )
-        glow(Offset(w * (0.15f + 0.5f * a), h * (0.02f + 0.08f * b)), w * 0.95f, AfarColors.Coral.copy(alpha = 0.26f * intensity))
-        glow(Offset(w * (0.95f - 0.4f * b), h * (0.12f + 0.1f * a)), w * 0.8f, AfarColors.Apricot.copy(alpha = 0.20f * intensity))
-        glow(Offset(w * (0.2f + 0.3f * b), h * (0.95f - 0.06f * a)), w * 1.0f, Color(0xFF5B4BFF).copy(alpha = 0.10f * intensity))
+        glow(Offset(w * (0.15f + 0.5f * a), h * (0.02f + 0.08f * b)), w * 0.95f, AfarColors.Azure.copy(alpha = 0.26f * intensity))
+        glow(Offset(w * (0.95f - 0.4f * b), h * (0.12f + 0.1f * a)), w * 0.8f, AfarColors.Sky.copy(alpha = 0.20f * intensity))
+        glow(Offset(w * (0.2f + 0.3f * b), h * (0.95f - 0.06f * a)), w * 1.0f, Color(0xFF6A4BFF).copy(alpha = 0.12f * intensity))
         // Gentle vignette so type always sits on deep ink.
         drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.55f to AfarColors.Ink.copy(alpha = 0.55f), 1f to AfarColors.Ink))
     }

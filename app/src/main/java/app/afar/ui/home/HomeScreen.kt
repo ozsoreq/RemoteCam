@@ -85,50 +85,41 @@ fun HomeScreen(lastRole: Role?, onPick: (Role) -> Unit, onHowItWorks: () -> Unit
 
             Box(Modifier.weight(1f))
 
-            Overline("Remote selfie camera", Modifier.enter(1), color = AfarColors.Apricot)
-            VSpace(14.dp)
             Text(
                 buildAnnotatedString {
-                    append("Great photos\nof yourself,\n")
+                    append("You, ")
                     withStyle(SpanStyle(fontStyle = FontStyle.Italic, brush = AfarColors.AccentBrush)) { append("from afar.") }
                 },
                 style = AfarType.Hero,
                 color = AfarColors.Paper,
-                modifier = Modifier.enter(2),
-            )
-            VSpace(16.dp)
-            Text(
-                "Prop one phone on a rock. Hold the other. See yourself live, then shoot.",
-                style = AfarType.Body,
-                color = AfarColors.PaperDim,
-                modifier = Modifier.enter(3).padding(end = 36.dp),
+                modifier = Modifier.enter(1),
             )
 
-            VSpace(30.dp)
+            VSpace(34.dp)
 
             RoleCard(
                 icon = AfarIcons.Camera,
-                title = "This phone is the Camera",
-                subtitle = "Prop it on a rock, a wall or a tripod",
+                title = "Camera",
+                subtitle = "This phone shoots",
                 lastUsed = lastRole == Role.Camera,
                 onClick = { onPick(Role.Camera) },
-                modifier = Modifier.enter(4),
+                modifier = Modifier.enter(2),
             )
             VSpace(12.dp)
             RoleCard(
                 icon = AfarIcons.Remote,
-                title = "This phone is the Remote",
-                subtitle = "Keep it in hand — frame, then tap",
+                title = "Remote",
+                subtitle = "This phone controls",
                 lastUsed = lastRole == Role.Remote,
                 onClick = { onPick(Role.Remote) },
-                modifier = Modifier.enter(5),
+                modifier = Modifier.enter(3),
             )
 
             VSpace(18.dp)
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .enter(6)
+                    .enter(4)
                     .clip(CircleShape)
                     .pressable { sharing = true }
                     .padding(vertical = 12.dp),
@@ -137,7 +128,7 @@ fun HomeScreen(lastRole: Role?, onPick: (Role) -> Unit, onHowItWorks: () -> Unit
             ) {
                 Icon(AfarIcons.Qr, null, Modifier.size(17.dp), tint = AfarColors.PaperDim)
                 HSpace(8.dp)
-                Text("Get Afar on the other phone", style = AfarType.Label, color = AfarColors.PaperDim)
+                Text("Get the app", style = AfarType.Label, color = AfarColors.PaperDim)
             }
             AdSlot()
             VSpace(8.dp)
@@ -157,7 +148,7 @@ private fun RoleCard(
     modifier: Modifier = Modifier,
 ) {
     val border = if (lastUsed) {
-        Brush.linearGradient(listOf(AfarColors.Apricot.copy(alpha = 0.75f), AfarColors.Coral.copy(alpha = 0.15f), Color.White.copy(alpha = 0.06f)))
+        Brush.linearGradient(listOf(AfarColors.Sky.copy(alpha = 0.75f), AfarColors.Azure.copy(alpha = 0.15f), Color.White.copy(alpha = 0.06f)))
     } else {
         AfarColors.HairlineBrush
     }
@@ -165,26 +156,26 @@ private fun RoleCard(
         modifier.fillMaxWidth().pressable(pressedScale = 0.975f, onClick = onClick),
         shape = RoundedCornerShape(28.dp),
         border = border,
-        tint = Color(0xFF121418).copy(alpha = 0.72f),
+        tint = Color(0xFF0F151F).copy(alpha = 0.72f),
     ) {
         Row(Modifier.padding(horizontal = 18.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
                     .size(56.dp)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(AfarColors.Apricot.copy(alpha = 0.22f), AfarColors.Coral.copy(alpha = 0.10f))))
-                    .border(1.dp, Brush.linearGradient(listOf(AfarColors.Apricot.copy(alpha = 0.6f), Color.Transparent)), CircleShape),
+                    .background(Brush.linearGradient(listOf(AfarColors.Sky.copy(alpha = 0.22f), AfarColors.Azure.copy(alpha = 0.10f))))
+                    .border(1.dp, Brush.linearGradient(listOf(AfarColors.Sky.copy(alpha = 0.6f), Color.Transparent)), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, null, Modifier.size(26.dp), tint = AfarColors.Apricot)
+                Icon(icon, null, Modifier.size(26.dp), tint = AfarColors.Sky)
             }
             HSpace(16.dp)
             Column(Modifier.weight(1f)) {
                 if (lastUsed) {
-                    Overline("Last used", color = AfarColors.Apricot)
+                    Overline("Last used", color = AfarColors.Sky)
                     VSpace(3.dp)
                 }
-                Text(title, style = AfarType.TitleSmall.copy(fontSize = AfarType.TitleSmall.fontSize * 0.86f), color = AfarColors.Paper)
+                Text(title, style = AfarType.TitleSmall.copy(fontSize = AfarType.TitleSmall.fontSize * 1.15f), color = AfarColors.Paper)
                 VSpace(2.dp)
                 Text(subtitle, style = AfarType.Caption, color = AfarColors.PaperDim)
             }
@@ -228,16 +219,9 @@ private fun ShareSheet(visible: Boolean, onDismiss: () -> Unit) {
                 tint = AfarColors.Ink2.copy(alpha = 0.97f),
             ) {
                 Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Overline("Second phone", color = AfarColors.Apricot)
+                    Overline("Second phone", color = AfarColors.Sky)
                     VSpace(8.dp)
                     Text("Scan to get Afar", style = AfarType.Title, color = AfarColors.Paper, textAlign = TextAlign.Center)
-                    VSpace(8.dp)
-                    Text(
-                        "Point the other phone's camera here. Both phones run the same free app.",
-                        style = AfarType.Body,
-                        color = AfarColors.PaperDim,
-                        textAlign = TextAlign.Center,
-                    )
                     VSpace(22.dp)
                     Box(
                         Modifier

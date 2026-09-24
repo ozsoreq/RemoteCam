@@ -205,13 +205,13 @@ class RemoteSession(
         }
         val st = _status.value
         if (st != null && !st.storageOk) {
-            _notices.tryEmit("Camera storage is full — free up space on that phone")
+            _notices.tryEmit("Camera storage full")
             return
         }
         beeper.haptic(strong = true)
         if (_phase.value is LinkPhase.Reconnecting) {
             _queuedShutter.value = timer
-            _notices.tryEmit("Shutter queued — fires as soon as the Camera is back")
+            _notices.tryEmit("Shutter queued")
             return
         }
         if (link.send(Cmd.Shutter(timer, burst))) {
@@ -235,7 +235,7 @@ class RemoteSession(
             shot.uri?.let { withContext(Dispatchers.IO) { store.delete(it) } }
         }
         if (!link.send(Cmd.Delete(shot.id))) {
-            _notices.tryEmit("Deleted here — the Camera copy stays until you reconnect")
+            _notices.tryEmit("Deleted here · Camera copy kept")
         }
     }
 

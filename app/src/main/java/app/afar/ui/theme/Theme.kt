@@ -10,11 +10,13 @@ import androidx.compose.material3.RippleConfiguration
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 
 private val scheme = darkColorScheme(
-    primary = AfarColors.Apricot,
+    primary = AfarColors.Sky,
     onPrimary = AfarColors.Ink,
-    secondary = AfarColors.Coral,
+    secondary = AfarColors.Azure,
     background = AfarColors.Ink,
     onBackground = AfarColors.Paper,
     surface = AfarColors.Ink2,
@@ -30,8 +32,11 @@ private val scheme = darkColorScheme(
 fun AfarTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = scheme, typography = AfarTypography) {
         CompositionLocalProvider(
+            // The UI is English-only: keep it left-to-right even on Hebrew/Arabic phones, so
+            // layouts don't mirror and the pairing code digits keep their order.
+            LocalLayoutDirection provides LayoutDirection.Ltr,
             LocalContentColor provides AfarColors.Paper,
-            LocalTextSelectionColors provides TextSelectionColors(AfarColors.Apricot, AfarColors.Apricot.copy(alpha = 0.3f)),
+            LocalTextSelectionColors provides TextSelectionColors(AfarColors.Sky, AfarColors.Sky.copy(alpha = 0.3f)),
             LocalRippleConfiguration provides RippleConfiguration(color = AfarColors.Paper),
             content = content,
         )

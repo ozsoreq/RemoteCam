@@ -93,15 +93,9 @@ fun PermissionScreen(role: Role, onGranted: () -> Unit, onBack: () -> Unit) {
             VSpace(12.dp)
             GlassIconButton(AfarIcons.Back, "Back", onBack)
             VSpace(36.dp)
-            Overline(if (role == Role.Camera) "Camera phone" else "Remote phone", color = AfarColors.Apricot)
+            Overline(if (role == Role.Camera) "Camera" else "Remote", color = AfarColors.Sky)
             VSpace(10.dp)
-            Text("A few quick\npermissions", style = AfarType.Title, color = AfarColors.Paper)
-            VSpace(12.dp)
-            Text(
-                "Everything stays between your two phones. Nothing is uploaded.",
-                style = AfarType.Body,
-                color = AfarColors.PaperDim,
-            )
+            Text("Permissions", style = AfarType.Title, color = AfarColors.Paper)
             VSpace(28.dp)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 groups.forEach { g ->
@@ -132,7 +126,7 @@ fun PermissionScreen(role: Role, onGranted: () -> Unit, onBack: () -> Unit) {
                                     Icon(AfarIcons.Check, "Granted", Modifier.align(Alignment.Center).size(15.dp), tint = AfarColors.Mint)
                                 }
                             } else {
-                                StatusDot(AfarColors.Apricot, dotSize = 7.dp)
+                                StatusDot(AfarColors.Sky, dotSize = 7.dp)
                             }
                         }
                     }
@@ -153,7 +147,7 @@ fun PermissionScreen(role: Role, onGranted: () -> Unit, onBack: () -> Unit) {
                     )
                 }, icon = AfarIcons.Arrow)
             } else {
-                PrimaryButton("Allow and continue", onClick = {
+                PrimaryButton("Allow", onClick = {
                     launcher.launch((missing + optionalPermissions()).distinct().toTypedArray())
                 }, icon = AfarIcons.Arrow)
             }

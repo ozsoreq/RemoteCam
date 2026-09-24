@@ -113,7 +113,7 @@ fun TimerChip(seconds: Int, onClick: () -> Unit, modifier: Modifier = Modifier) 
             Modifier.align(Alignment.Center).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(AfarIcons.Timer, "Timer", Modifier.size(18.dp), tint = if (seconds > 0) AfarColors.Apricot else AfarColors.PaperDim)
+            Icon(AfarIcons.Timer, "Timer", Modifier.size(18.dp), tint = if (seconds > 0) AfarColors.Sky else AfarColors.PaperDim)
             Spacer(Modifier.width(6.dp))
             AnimatedContent(
                 targetState = seconds,
@@ -234,8 +234,8 @@ fun FocusReticle(key: Any, modifier: Modifier = Modifier) {
     }
     Canvas(modifier.size(76.dp)) {
         val r = size.minDimension / 2 * scale.value * 0.9f
-        drawCircle(AfarColors.Apricot.copy(alpha = alpha.value), radius = r, style = Stroke(1.6.dp.toPx()))
-        drawCircle(AfarColors.Apricot.copy(alpha = alpha.value), radius = 2.dp.toPx())
+        drawCircle(AfarColors.Sky.copy(alpha = alpha.value), radius = r, style = Stroke(1.6.dp.toPx()))
+        drawCircle(AfarColors.Sky.copy(alpha = alpha.value), radius = 2.dp.toPx())
     }
 }
 
@@ -291,6 +291,34 @@ fun LensPicker(
                     } else {
                         Text(lens.label, style = AfarType.Mono, color = if (active) AfarColors.Ink else AfarColors.Paper)
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The 4-digit pairing code as separate tiles. Always laid out left-to-right: on an RTL
+ * phone a plain Row would reverse the digits and the two screens would disagree.
+ */
+@Composable
+fun CodeDigits(code: String, modifier: Modifier = Modifier, tileScale: Float = 1f) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr,
+    ) {
+        Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            code.forEach { ch ->
+                Glass(
+                    Modifier.size(width = 60.dp * tileScale, height = 78.dp * tileScale),
+                    shape = RoundedCornerShape(18.dp),
+                    tint = AfarColors.GlassLight,
+                ) {
+                    Text(
+                        "$ch",
+                        style = AfarType.Code.copy(fontSize = AfarType.Code.fontSize * 0.82f * tileScale),
+                        color = AfarColors.Paper,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
                 }
             }
         }

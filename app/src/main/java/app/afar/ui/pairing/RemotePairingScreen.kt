@@ -52,6 +52,7 @@ import app.afar.net.Peer
 import app.afar.net.Role
 import app.afar.session.SessionService
 import app.afar.ui.components.AuroraBackground
+import app.afar.ui.components.CodeDigits
 import app.afar.ui.components.Glass
 import app.afar.ui.components.GlassIconButton
 import app.afar.ui.components.HSpace
@@ -116,18 +117,10 @@ fun RemotePairingScreen(app: AfarApp, onConnected: () -> Unit, onBack: () -> Uni
             VSpace(12.dp)
             GlassIconButton(AfarIcons.Back, "Back", onBack)
             VSpace(24.dp)
-            Overline("Remote", color = AfarColors.Apricot)
-            VSpace(8.dp)
             Text(
-                if (cameras.isEmpty()) "Looking for\nyour Camera…" else "Tap your\nCamera",
+                if (cameras.isEmpty()) "Finding\nCamera…" else "Tap your\nCamera",
                 style = AfarType.Title,
                 color = AfarColors.Paper,
-            )
-            VSpace(10.dp)
-            Text(
-                "On the other phone, open Afar and choose Camera. Works with Bluetooth and Wi-Fi on — no internet needed.",
-                style = AfarType.Body,
-                color = AfarColors.PaperDim,
             )
 
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -136,7 +129,7 @@ fun RemotePairingScreen(app: AfarApp, onConnected: () -> Unit, onBack: () -> Uni
 
             AnimatedVisibility(slow && cameras.isEmpty(), enter = fadeIn(), exit = fadeOut()) {
                 NoticePill(
-                    "Nothing yet — keep the phones within a few metres",
+                    "Open Afar → Camera on the other phone",
                     Tone.Warn,
                     Modifier.padding(bottom = 12.dp),
                 )
@@ -168,21 +161,21 @@ private fun CameraRow(peer: Peer, known: Boolean, onClick: () -> Unit) {
     Glass(
         Modifier.fillMaxWidth().pressable(pressedScale = 0.97f, onClick = onClick),
         shape = RoundedCornerShape(24.dp),
-        tint = Color(0xFF121418).copy(alpha = 0.8f),
+        tint = Color(0xFF0F151F).copy(alpha = 0.8f),
     ) {
         Row(Modifier.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(AfarColors.Apricot.copy(alpha = 0.14f)),
+                Modifier.size(44.dp).clip(CircleShape).background(AfarColors.Sky.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(AfarIcons.Camera, null, Modifier.size(22.dp), tint = AfarColors.Apricot)
+                Icon(AfarIcons.Camera, null, Modifier.size(22.dp), tint = AfarColors.Sky)
             }
             HSpace(14.dp)
             Column(Modifier.weight(1f)) {
                 Text(peer.name, style = AfarType.BodyStrong, color = AfarColors.Paper)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatusDot(AfarColors.Mint, dotSize = 5.dp)
-                    Text(if (known) "Paired before · tap to reconnect" else "Camera · tap to connect", style = AfarType.Caption, color = AfarColors.PaperDim)
+                    Text(if (known) "Paired before" else "Camera", style = AfarType.Caption, color = AfarColors.PaperDim)
                 }
             }
             Icon(AfarIcons.Arrow, null, Modifier.size(20.dp), tint = AfarColors.PaperFaint)
@@ -202,13 +195,13 @@ private fun Radar(modifier: Modifier) {
                 val q = (p + i / 4f) % 1f
                 drawCircle(
                     brush = Brush.radialGradient(
-                        listOf(Color.Transparent, AfarColors.Apricot.copy(alpha = 0.10f * (1 - q))),
+                        listOf(Color.Transparent, AfarColors.Sky.copy(alpha = 0.10f * (1 - q))),
                         center = center,
                         radius = maxR * q + 1f,
                     ),
                     radius = maxR * q,
                 )
-                drawCircle(AfarColors.Apricot.copy(alpha = 0.45f * (1 - q)), radius = maxR * q, style = Stroke(1.2f * density))
+                drawCircle(AfarColors.Sky.copy(alpha = 0.45f * (1 - q)), radius = maxR * q, style = Stroke(1.2f * density))
             }
             drawCircle(Color.White.copy(alpha = 0.06f), radius = maxR * 0.33f, style = Stroke(1f * density))
             drawCircle(Color.White.copy(alpha = 0.04f), radius = maxR * 0.66f, style = Stroke(1f * density))
@@ -242,33 +235,27 @@ private fun CodeSheet(connection: Connection, onConfirm: () -> Unit, onCancel: (
                 tint = AfarColors.Ink2.copy(alpha = 0.97f),
             ) {
                 Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Overline(p.peer.name, color = AfarColors.Apricot)
+                    Overline(p.peer.name, color = AfarColors.Sky)
                     VSpace(10.dp)
                     if (p.code.isEmpty() || p.accepted) {
                         Text("Connecting…", style = AfarType.Title, color = AfarColors.Paper)
                         VSpace(8.dp)
                         Text(
-                            if (p.code.isEmpty()) "Reaching the Camera" else "Code ${p.code} · switching to a fast Wi-Fi link",
+                            if (p.code.isEmpty()) "Reaching the Camera" else "Code ${p.code}",
                             style = AfarType.Body,
                             color = AfarColors.PaperDim,
                             textAlign = TextAlign.Center,
                         )
                         VSpace(22.dp)
-                        StatusDot(AfarColors.Apricot, pulse = true, dotSize = 10.dp)
+                        StatusDot(AfarColors.Sky, pulse = true, dotSize = 10.dp)
                     } else {
-                        Text("Same code on the Camera?", style = AfarType.TitleSmall, color = AfarColors.Paper, textAlign = TextAlign.Center)
+                        Text("Same code?", style = AfarType.TitleSmall, color = AfarColors.Paper, textAlign = TextAlign.Center)
                         VSpace(20.dp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            p.code.forEach { ch ->
-                                Glass(Modifier.size(width = 58.dp, height = 74.dp), shape = RoundedCornerShape(18.dp), tint = AfarColors.GlassLight) {
-                                    Text("$ch", style = AfarType.Code.copy(fontSize = AfarType.Code.fontSize * 0.8f), color = AfarColors.Paper, modifier = Modifier.align(Alignment.Center))
-                                }
-                            }
-                        }
+                        CodeDigits(p.code)
                         VSpace(26.dp)
-                        PrimaryButton("Yes, connect", onConfirm, icon = AfarIcons.Check)
+                        PrimaryButton("Connect", onConfirm, icon = AfarIcons.Check)
                         VSpace(10.dp)
-                        SecondaryButton("Not my phone", onCancel, Modifier.fillMaxWidth())
+                        SecondaryButton("Cancel", onCancel, Modifier.fillMaxWidth())
                     }
                     VSpace(4.dp)
                 }

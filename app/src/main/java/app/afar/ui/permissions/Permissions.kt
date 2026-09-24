@@ -12,7 +12,7 @@ data class PermissionInfo(val permissions: List<String>, val title: String, val 
 /** Grouped runtime permissions, each with the one-line reason shown to the user. */
 fun permissionGroups(role: Role): List<PermissionInfo> = buildList {
     if (role == Role.Camera) {
-        add(PermissionInfo(listOf(Manifest.permission.CAMERA), "Camera", "To take the photo with this phone."))
+        add(PermissionInfo(listOf(Manifest.permission.CAMERA), "Camera", "To take the photo."))
     }
     val nearby = buildList {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -23,19 +23,19 @@ fun permissionGroups(role: Role): List<PermissionInfo> = buildList {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.NEARBY_WIFI_DEVICES)
     }
     if (nearby.isNotEmpty()) {
-        add(PermissionInfo(nearby, "Nearby devices", "To find and link your two phones — no internet needed."))
+        add(PermissionInfo(nearby, "Nearby devices", "To link your two phones, offline."))
     }
     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
         add(
             PermissionInfo(
                 listOf(Manifest.permission.ACCESS_FINE_LOCATION),
                 "Location",
-                "Android needs it to scan for nearby phones. Afar never reads where you are.",
+                "Needed to find nearby phones. Never tracked.",
             ),
         )
     }
     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-        add(PermissionInfo(listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), "Photos", "To save your shots to the gallery."))
+        add(PermissionInfo(listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), "Photos", "To save to your gallery."))
     }
 }
 

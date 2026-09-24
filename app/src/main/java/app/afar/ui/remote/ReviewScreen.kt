@@ -54,7 +54,7 @@ fun ReviewScreen(
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlassIconButton(AfarIcons.Back, "Back to camera", onClose, size = 40.dp)
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Overline("${pager.currentPage + 1} of ${shots.size}", color = AfarColors.Apricot)
+                    Overline("${pager.currentPage + 1} of ${shots.size}", color = AfarColors.Sky)
                     Text(current?.let { timeFormat.format(Date(it.takenAt)) } ?: "", style = AfarType.Label, color = AfarColors.Paper)
                 }
                 GlassIconButton(AfarIcons.Trash, "Delete on both phones", { current?.let(onDelete) }, size = 40.dp)
@@ -82,7 +82,7 @@ fun ReviewScreen(
             }
 
             Text(
-                "Saved on both phones",
+                "On both phones",
                 style = AfarType.Caption,
                 color = AfarColors.PaperFaint,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp),

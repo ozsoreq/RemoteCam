@@ -52,12 +52,14 @@ class CameraController(private val context: Context) {
     private var previewView: PreviewView? = null
     private var camera: Camera? = null
 
-    private var preview: Preview? = null
     private var capture: ImageCapture? = null
     private var analysis: ImageAnalysis? = null
 
     /** Called on a background thread for every analysis frame; the image is closed afterwards. */
     @Volatile var frameSink: ((ImageProxy) -> Unit)? = null
+
+    /** Reports problems the Remote should hear about (e.g. a lens that won't start). */
+    var onError: ((String) -> Unit)? = null
 
     @Volatile private var analysisRotation = 0
 
@@ -111,9 +113,9 @@ class CameraController(private val context: Context) {
     fun setLens(lens: Lens) {
         if (lens !in _lenses.value) return
         ContextCompat.getMainExecutor(context).execute {
-            if (lens == _lens.value && camera != null) return@execute
+            if (lens == _lens.value && camera != null && _bound.value) return@execute
             val current = _lens.value
-            val zoomOnly = !useWideCamera && camera != null &&
+            val zoomOnly = !useWideCamera && camera != null && _bound.value &&
                 current != Lens.Front && lens != Lens.Front
             if (zoomOnly) {
                 camera?.cameraControl?.setZoomRatio(if (lens == Lens.Ultrawide) wideZoom else 1f)
@@ -194,7 +196,13 @@ class CameraController(private val context: Context) {
         }
     }
 
-    private fun bind(lens: Lens) {
+    /**
+     * (Re)binds CameraX to [lens]. Every attempt builds fresh use cases (a use case from a
+     * failed bind can stay half-attached and poison the retry), steps down to lighter stream
+     * combinations for cameras that can't run three at once (typically the front sensor),
+     * and on total failure restores the previous lens instead of leaving a dead pipeline.
+     */
+    private fun bind(lens: Lens, fallbackTo: Lens? = _lens.value.takeIf { camera != null }) {
         val p = provider ?: return
         val lifecycleOwner = owner ?: return
         val view = previewView ?: return
@@ -207,67 +215,42 @@ class CameraController(private val context: Context) {
             Lens.Main -> CameraSelector.DEFAULT_BACK_CAMERA
         }
 
-        val ratio = ResolutionSelector.Builder()
-            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-
-        val newPreview = Preview.Builder().setResolutionSelector(ratio.build()).build().also {
-            it.setSurfaceProvider(view.surfaceProvider)
-        }
-        val newCapture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .setResolutionSelector(
-                ResolutionSelector.Builder()
-                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-                    .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
-                    .build(),
-            )
-            .setTargetRotation(targetRotation)
-            .build()
-        val newAnalysis = ImageAnalysis.Builder()
-            .setResolutionSelector(
-                ResolutionSelector.Builder()
-                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-                    .setResolutionStrategy(
-                        ResolutionStrategy(Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
-                    )
-                    .build(),
-            )
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-            .setTargetRotation(targetRotation)
-            .build()
-            .also { a ->
-                a.setAnalyzer(analysisExecutor) { image ->
-                    analysisRotation = image.imageInfo.rotationDegrees
-                    try {
-                        frameSink?.invoke(image)
-                    } catch (t: Throwable) {
-                        Log.w(TAG, "frame sink failed", t)
-                    } finally {
-                        image.close()
-                    }
-                }
-            }
-
-        p.unbindAll()
-        val cam = runCatching {
-            p.bindToLifecycle(lifecycleOwner, selector, newPreview, newCapture, newAnalysis)
-        }.recoverCatching {
-            // Some LEGACY devices can't run three streams; the Remote's view matters more
-            // than the on-phone viewfinder, so drop Preview first.
-            Log.w(TAG, "3-stream bind failed, retrying without preview", it)
+        // Richest first; each entry = (with preview, full-res capture)
+        val attempts = listOf(true to true, false to true, true to false, false to false)
+        var bound: Triple<Camera, ImageCapture, ImageAnalysis>? = null
+        for ((withPreview, highRes) in attempts) {
             p.unbindAll()
-            p.bindToLifecycle(lifecycleOwner, selector, newCapture, newAnalysis)
-        }.getOrElse {
-            Log.e(TAG, "camera bind failed", it)
+            val c = buildCapture(highRes)
+            val a = buildAnalysis()
+            val cases = buildList {
+                if (withPreview) add(buildPreview(view))
+                add(c)
+                add(a)
+            }
+            val cam = runCatching { p.bindToLifecycle(lifecycleOwner, selector, *cases.toTypedArray()) }
+                .onFailure { Log.w(TAG, "bind $lens (preview=$withPreview, highRes=$highRes) failed", it) }
+                .getOrNull()
+            if (cam != null) {
+                bound = Triple(cam, c, a)
+                break
+            }
+        }
+
+        if (bound == null) {
+            p.unbindAll()
+            camera = null
+            capture = null
+            analysis = null
             _bound.value = false
+            onError?.invoke("Couldn't switch to the ${lens.label} camera")
+            if (fallbackTo != null && fallbackTo != lens) bind(fallbackTo, fallbackTo = null)
             return
         }
 
+        val (cam, c, a) = bound
         camera = cam
-        preview = newPreview
-        capture = newCapture
-        analysis = newAnalysis
+        capture = c
+        analysis = a
         _bound.value = true
 
         if (selector == CameraSelector.DEFAULT_BACK_CAMERA) {
@@ -281,6 +264,50 @@ class CameraController(private val context: Context) {
         }
         _lens.value = if (lens == Lens.Ultrawide && mainMinZoom >= 1f && wideCameraId == null) Lens.Main else lens
     }
+
+    private fun buildPreview(view: PreviewView) = Preview.Builder()
+        .setResolutionSelector(
+            ResolutionSelector.Builder().setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY).build(),
+        )
+        .build()
+        .also { it.setSurfaceProvider(view.surfaceProvider) }
+
+    private fun buildCapture(highRes: Boolean) = ImageCapture.Builder()
+        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+        .setResolutionSelector(
+            ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                .apply { if (highRes) setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY) }
+                .build(),
+        )
+        .setTargetRotation(targetRotation)
+        .build()
+
+    private fun buildAnalysis() = ImageAnalysis.Builder()
+        .setResolutionSelector(
+            ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                .setResolutionStrategy(
+                    ResolutionStrategy(Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
+                )
+                .build(),
+        )
+        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+        .setTargetRotation(targetRotation)
+        .build()
+        .also { a ->
+            a.setAnalyzer(analysisExecutor) { image ->
+                analysisRotation = image.imageInfo.rotationDegrees
+                try {
+                    frameSink?.invoke(image)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "frame sink failed", t)
+                } finally {
+                    image.close()
+                }
+            }
+        }
 
     @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
     private fun discoverLenses(p: ProcessCameraProvider) {

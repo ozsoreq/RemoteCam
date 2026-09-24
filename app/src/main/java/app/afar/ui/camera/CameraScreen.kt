@@ -68,6 +68,7 @@ import app.afar.net.Connection
 import app.afar.net.Lens
 import app.afar.net.Role
 import app.afar.session.SessionService
+import app.afar.ui.components.CodeDigits
 import app.afar.ui.components.CountdownNumeral
 import app.afar.ui.components.EaseOutExpo
 import app.afar.ui.components.FocusReticle
@@ -269,8 +270,6 @@ fun CameraScreen(app: AfarApp, activity: MainActivity, onExit: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     StatusDot(AfarColors.Mint, pulse = true, dotSize = 7.dp)
                     VSpace(10.dp)
-                    Text("Live · saving battery", style = AfarType.Label, color = AfarColors.PaperDim)
-                    VSpace(4.dp)
                     Text("Tap to wake", style = AfarType.Caption, color = AfarColors.PaperFaint)
                 }
             }
@@ -314,31 +313,21 @@ private fun WaitingCard(deviceName: String, advertising: Boolean, code: String?)
         Column(Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(if (advertising || code != null) AfarColors.Mint else AfarColors.Amber, pulse = true, dotSize = 7.dp)
-                Overline(if (code != null) "Remote found" else if (advertising) "Visible nearby" else "Starting…", color = AfarColors.PaperDim)
+                Overline(if (code != null) "Remote found" else if (advertising) "Ready" else "Starting…", color = AfarColors.PaperDim)
             }
             VSpace(10.dp)
             AnimatedContent(code, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "code") { c ->
                 if (c == null) {
                     Column {
-                        Text("Waiting for\nyour Remote", style = AfarType.Title, color = AfarColors.Paper)
-                        VSpace(10.dp)
-                        Text(
-                            "On the other phone, open Afar and choose Remote. This phone appears as “$deviceName”.",
-                            style = AfarType.Body,
-                            color = AfarColors.PaperDim,
-                        )
+                        Text("Waiting for\nRemote", style = AfarType.Title, color = AfarColors.Paper)
+                        VSpace(8.dp)
+                        Text("Visible as “$deviceName”", style = AfarType.Body, color = AfarColors.PaperDim)
                     }
                 } else {
                     Column {
-                        Text("Check the Remote\nshows this code", style = AfarType.TitleSmall, color = AfarColors.Paper)
+                        Text("Same code?", style = AfarType.TitleSmall, color = AfarColors.Paper)
                         VSpace(18.dp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            c.forEach { ch ->
-                                Glass(Modifier.size(width = 62.dp, height = 80.dp), shape = RoundedCornerShape(18.dp), tint = AfarColors.GlassLight) {
-                                    Text("$ch", style = AfarType.Code.copy(fontSize = AfarType.Code.fontSize * 0.85f), color = AfarColors.Paper, modifier = Modifier.align(Alignment.Center), textAlign = TextAlign.Center)
-                                }
-                            }
-                        }
+                        CodeDigits(c)
                     }
                 }
             }
@@ -363,7 +352,7 @@ private fun CountdownField(countdown: Int?, quadrant: Int) {
             .graphicsLayer { alpha = base }
             .background(
                 androidx.compose.ui.graphics.Brush.radialGradient(
-                    listOf(AfarColors.Coral.copy(alpha = 0.55f + 0.35f * pulse.value), AfarColors.Ink.copy(alpha = 0.85f)),
+                    listOf(AfarColors.Azure.copy(alpha = 0.55f + 0.35f * pulse.value), AfarColors.Ink.copy(alpha = 0.85f)),
                 ),
             ),
         contentAlignment = Alignment.Center,
@@ -417,7 +406,7 @@ private fun LockOverlay(dimmed: Boolean, onUnlock: () -> Unit) {
                 Icon(AfarIcons.Lock, "Locked", Modifier.size(26.dp), tint = AfarColors.Paper)
             }
             VSpace(12.dp)
-            Text("Locked · hold to unlock", style = AfarType.Label, color = AfarColors.PaperDim)
+            Text("Hold to unlock", style = AfarType.Label, color = AfarColors.PaperDim)
         }
     }
 }
