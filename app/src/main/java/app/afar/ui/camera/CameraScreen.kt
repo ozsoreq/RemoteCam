@@ -460,7 +460,7 @@ private fun LockOverlay(dimmed: Boolean, onUnlock: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = if (dimmed) 0.94f else 0.25f))
+            .background(Color.Black.copy(alpha = if (dimmed) 0.94f else 0.45f))
             .pointerInput(Unit) {
                 detectTapGestures(onPress = {
                     val job = scope.launch {
