@@ -36,7 +36,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: afar-apks
+          name: holdthatpose-apks
           path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
 
@@ -82,7 +82,7 @@ jobs:
             ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true || touch tests-failed
             adb root || true
             sleep 3
-            mkdir -p screens && adb pull /sdcard/Android/data/app.afar/files/screens/. screens/ || true
+            mkdir -p screens && adb pull /sdcard/Android/data/app.holdthatpose/files/screens/. screens/ || true
             adb logcat -d > logcat.txt || true
             cat app/build/outputs/androidTest-results/connected/debug/*.xml || true
             test ! -f tests-failed

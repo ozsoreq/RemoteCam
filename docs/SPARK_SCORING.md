@@ -1,6 +1,6 @@
 # Spark scoring
 
-Afar's release bar. Each dimension is scored 0–10 by reviewing code, CI results and emulator
+Hold That Pose's release bar. Each dimension is scored 0–10 by reviewing code, CI results and emulator
 screenshots; the weighted total must be **above 8.5**. Scores are judgement calls backed by
 evidence — cite it, and never score what hasn't been checked.
 

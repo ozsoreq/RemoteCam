@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Working name; the spec leaves the final app name open. -->
-    <string name="app_name">Afar</string>
+    <string name="app_name">Hold That Pose</string>
     <string name="notif_channel">Shooting session</string>
     <string name="notif_camera">Camera is live — waiting for your Remote</string>
     <string name="notif_remote">Remote is connected to your Camera</string>
-    <string name="play_store_url">https://play.google.com/store/apps/details?id=app.afar</string>
+    <string name="play_store_url">https://play.google.com/store/apps/details?id=app.holdthatpose</string>
 </resources>

@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "app.afar"
+    namespace = "app.holdthatpose"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.afar"
+        applicationId = "app.holdthatpose"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Afar"
+rootProject.name = "HoldThatPose"
 include(":app")

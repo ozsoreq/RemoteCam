@@ -1,0 +1,246 @@
+package app.holdthatpose.ui.home
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import app.holdthatpose.R
+import app.holdthatpose.net.Role
+import app.holdthatpose.ui.components.AuroraBackground
+import app.holdthatpose.ui.components.Glass
+import app.holdthatpose.ui.components.GlassIconButton
+import app.holdthatpose.ui.components.HSpace
+import app.holdthatpose.ui.components.Overline
+import app.holdthatpose.ui.components.SecondaryButton
+import app.holdthatpose.ui.components.VSpace
+import app.holdthatpose.ui.components.enter
+import app.holdthatpose.ui.components.pressable
+import app.holdthatpose.ui.icons.PoseIcons
+import app.holdthatpose.ui.theme.PoseColors
+import app.holdthatpose.ui.theme.PoseType
+
+@OptIn(ExperimentalTextApi::class)
+@Composable
+fun HomeScreen(lastRole: Role?, onPick: (Role) -> Unit, onHowItWorks: () -> Unit, onSettings: () -> Unit) {
+    var sharing by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize()) {
+        AuroraBackground()
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 22.dp),
+        ) {
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp).enter(0), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "hold that pose",
+                    style = PoseType.TitleSmall.copy(fontStyle = FontStyle.Italic),
+                    color = PoseColors.Paper,
+                )
+                Box(Modifier.weight(1f))
+                GlassIconButton(PoseIcons.Info, "How it works", onHowItWorks)
+                HSpace(8.dp)
+                GlassIconButton(PoseIcons.Settings, "Settings", onSettings)
+            }
+
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Illustration(0, Modifier.size(230.dp).enter(0, baseDelay = 200))
+            }
+
+            Text(
+                buildAnnotatedString {
+                    append("You, ")
+                    withStyle(SpanStyle(fontStyle = FontStyle.Italic, brush = PoseColors.AccentBrush)) { append("from afar.") }
+                },
+                style = PoseType.Hero,
+                color = PoseColors.Paper,
+                modifier = Modifier.enter(1),
+            )
+
+            VSpace(34.dp)
+
+            RoleCard(
+                icon = PoseIcons.Camera,
+                title = "Camera",
+                subtitle = "This phone shoots",
+                lastUsed = lastRole == Role.Camera,
+                onClick = { onPick(Role.Camera) },
+                modifier = Modifier.enter(2),
+            )
+            VSpace(12.dp)
+            RoleCard(
+                icon = PoseIcons.Remote,
+                title = "Remote",
+                subtitle = "This phone controls",
+                lastUsed = lastRole == Role.Remote,
+                onClick = { onPick(Role.Remote) },
+                modifier = Modifier.enter(3),
+            )
+
+            VSpace(18.dp)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .enter(4)
+                    .clip(CircleShape)
+                    .pressable { sharing = true }
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(PoseIcons.Qr, null, Modifier.size(17.dp), tint = PoseColors.PaperDim)
+                HSpace(8.dp)
+                Text("Get the app", style = PoseType.Label, color = PoseColors.PaperDim)
+            }
+            AdSlot()
+            VSpace(8.dp)
+        }
+
+        ShareSheet(visible = sharing, onDismiss = { sharing = false })
+    }
+}
+
+@Composable
+private fun RoleCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    lastUsed: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val border = if (lastUsed) {
+        Brush.linearGradient(listOf(PoseColors.Sky.copy(alpha = 0.75f), PoseColors.Azure.copy(alpha = 0.15f), Color.White.copy(alpha = 0.06f)))
+    } else {
+        PoseColors.HairlineBrush
+    }
+    Glass(
+        modifier.fillMaxWidth().pressable(pressedScale = 0.975f, onClick = onClick),
+        shape = RoundedCornerShape(28.dp),
+        border = border,
+        tint = Color(0xFF0F151F).copy(alpha = 0.72f),
+    ) {
+        Row(Modifier.padding(horizontal = 18.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(PoseColors.Sky.copy(alpha = 0.22f), PoseColors.Azure.copy(alpha = 0.10f))))
+                    .border(1.dp, Brush.linearGradient(listOf(PoseColors.Sky.copy(alpha = 0.6f), Color.Transparent)), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, null, Modifier.size(26.dp), tint = PoseColors.Sky)
+            }
+            HSpace(16.dp)
+            Column(Modifier.weight(1f)) {
+                if (lastUsed) {
+                    Overline("Last used", color = PoseColors.Sky)
+                    VSpace(3.dp)
+                }
+                Text(title, style = PoseType.TitleSmall.copy(fontSize = PoseType.TitleSmall.fontSize * 1.15f), color = PoseColors.Paper)
+                VSpace(2.dp)
+                Text(subtitle, style = PoseType.Caption, color = PoseColors.PaperDim)
+            }
+            HSpace(8.dp)
+            Icon(PoseIcons.Arrow, null, Modifier.size(20.dp), tint = PoseColors.PaperFaint)
+        }
+    }
+}
+
+/**
+ * Banner-ad placement. The spec allows ads on Home and Pairing only (never while shooting);
+ * wire the ad SDK in here. Renders nothing until then so the MVP stays small and clean.
+ */
+@Composable
+fun AdSlot(modifier: Modifier = Modifier) {
+    Box(modifier)
+}
+
+/** Bottom sheet with a QR code linking to the store, so the second phone can install fast. */
+@Composable
+private fun ShareSheet(visible: Boolean, onDismiss: () -> Unit) {
+    val url = stringResource(R.string.play_store_url)
+    Box(Modifier.fillMaxSize()) {
+        AnimatedVisibility(visible, enter = fadeIn(tween(250)), exit = fadeOut(tween(200))) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+            )
+        }
+        AnimatedVisibility(
+            visible,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(tween(420, easing = app.holdthatpose.ui.components.EaseOutExpo)) { it } + fadeIn(),
+            exit = slideOutVertically(tween(260)) { it } + fadeOut(),
+        ) {
+            Glass(
+                Modifier.fillMaxWidth().padding(10.dp).navigationBarsPadding(),
+                shape = RoundedCornerShape(32.dp),
+                tint = PoseColors.Ink2.copy(alpha = 0.97f),
+            ) {
+                Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Overline("Second phone", color = PoseColors.Sky)
+                    VSpace(8.dp)
+                    Text("Scan to get\nHold That Pose", style = PoseType.Title, color = PoseColors.Paper, textAlign = TextAlign.Center)
+                    VSpace(22.dp)
+                    Box(
+                        Modifier
+                            .size(220.dp)
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(PoseColors.Paper)
+                            .padding(22.dp),
+                    ) {
+                        QrCode(url, Modifier.fillMaxSize().aspectRatio(1f), color = PoseColors.Ink)
+                    }
+                    VSpace(22.dp)
+                    SecondaryButton("Done", onDismiss, Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
+
