@@ -36,6 +36,7 @@ class SmokeTest {
 
     @Before
     fun freshInstall() {
+        stopRunningSessions()
         prefs.edit().clear().commit()
     }
 
@@ -130,6 +131,7 @@ class CameraSmokeTest {
 
     @Before
     fun returningUser() {
+        stopRunningSessions()
         InstrumentationRegistry.getInstrumentation().targetContext
             .getSharedPreferences("holdthatpose", Context.MODE_PRIVATE).edit()
             .clear()
@@ -153,5 +155,19 @@ class CameraSmokeTest {
             compose.onNodeWithText("Hold to unlock").assertIsDisplayed()
             compose.screenshot("07_camera_locked")
         }
+    }
+}
+
+/**
+ * Sessions live in the Application and the test process is shared between tests, so a
+ * session left running by one test would (correctly) make the app reopen straight into it.
+ * Start every test from a clean slate.
+ */
+internal fun stopRunningSessions() {
+    val instr = InstrumentationRegistry.getInstrumentation()
+    val app = instr.targetContext.applicationContext as PoseApp
+    instr.runOnMainSync {
+        app.cameraSession.stop()
+        app.remoteSession.stop()
     }
 }
