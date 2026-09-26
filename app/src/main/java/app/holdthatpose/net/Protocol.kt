@@ -5,6 +5,7 @@ import org.json.JSONObject
 import java.io.DataInputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
+import java.util.zip.CRC32
 
 /**
  * Wire format between the two phones.
@@ -26,6 +27,16 @@ object Protocol {
     const val FLAG_BUMPED = 1
     const val FLAG_LOW_QUALITY = 2
     const val FLAG_FRONT = 4
+
+    /** Largest review copy we accept; a ~2 MP JPEG is well under 2 MB. */
+    const val MAX_PHOTO_BYTES = 16 * 1024 * 1024
+
+    /** Timer values the shutter understands; anything else is clamped down to one of these. */
+    val TIMER_STEPS = listOf(0, 3, 5, 10)
+
+    fun clampTimer(t: Int): Int = TIMER_STEPS.lastOrNull { it <= t } ?: 0
+
+    fun crc(bytes: ByteArray): Long = CRC32().apply { update(bytes) }.value
 
     fun encodeCmd(cmd: Cmd): ByteArray {
         val json = cmd.toJson().toString().toByteArray(Charsets.UTF_8)
@@ -60,26 +71,48 @@ object Protocol {
         }
     }
 
+    /** Fills in the header's length and checksum from [jpeg], so the receiver can verify both. */
     fun photoStreamBytes(header: PhotoHeader, jpeg: ByteArray): ByteArray {
-        val h = header.toJson().toString().toByteArray(Charsets.UTF_8)
+        val full = header.copy(len = jpeg.size, crc = crc(jpeg))
+        val h = full.toJson().toString().toByteArray(Charsets.UTF_8)
         return ByteBuffer.allocate(4 + h.size + jpeg.size).putInt(h.size).put(h).put(jpeg).array()
     }
 
+    /**
+     * Reads exactly the announced number of bytes and checks the CRC. Throws on a truncated,
+     * oversized or corrupted stream; never allocates more than [MAX_PHOTO_BYTES].
+     */
     fun readPhotoStream(input: InputStream): Pair<PhotoHeader, ByteArray> {
         val data = DataInputStream(input.buffered())
         val headerLen = data.readInt()
         require(headerLen in 1..64_000) { "bad header" }
-        val header = ByteArray(headerLen).also { data.readFully(it) }
-        val jpeg = data.readBytes()
-        return PhotoHeader.fromJson(JSONObject(String(header, Charsets.UTF_8))) to jpeg
+        val headerBytes = ByteArray(headerLen).also { data.readFully(it) }
+        val header = PhotoHeader.fromJson(JSONObject(String(headerBytes, Charsets.UTF_8)))
+        require(header.len in 1..MAX_PHOTO_BYTES) { "bad length" }
+        val jpeg = ByteArray(header.len).also { data.readFully(it) }
+        require(crc(jpeg) == header.crc) { "bad checksum" }
+        return header to jpeg
     }
 }
 
-data class PhotoHeader(val id: String, val width: Int, val height: Int, val takenAt: Long) {
-    fun toJson() = JSONObject().put("id", id).put("w", width).put("h", height).put("at", takenAt)
+/** [len] and [crc] describe the JPEG that follows; -1 = unknown (always rejected on read). */
+data class PhotoHeader(
+    val id: String,
+    val width: Int,
+    val height: Int,
+    val takenAt: Long,
+    val len: Int = -1,
+    val crc: Long = -1,
+) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("w", width).put("h", height).put("at", takenAt)
+        .put("len", len).put("crc", crc)
 
     companion object {
-        fun fromJson(o: JSONObject) = PhotoHeader(o.getString("id"), o.optInt("w"), o.optInt("h"), o.optLong("at"))
+        fun fromJson(o: JSONObject) = PhotoHeader(
+            o.getString("id"), o.optInt("w"), o.optInt("h"), o.optLong("at"),
+            len = o.optInt("len", -1),
+            crc = o.optLong("crc", -1),
+        )
     }
 }
 
@@ -108,6 +141,12 @@ data class CameraStatus(
     /** Seconds until the Camera drops an idle session; -1 = no timeout running. */
     val idleLeft: Int = -1,
     val safeMode: Boolean = true,
+    /** The Camera's alarm stream is silent (volume 0 or Do Not Disturb): bystanders won't hear cues. */
+    val muted: Boolean = false,
+    /** Seconds left to tap Continue on the Camera after the session limit; -1 = not asking. */
+    val capLeft: Int = -1,
+    /** Seconds since the session started. */
+    val sessionSec: Int = 0,
 )
 
 sealed interface Cmd {
@@ -121,6 +160,8 @@ sealed interface Cmd {
     data class Focus(val x: Float, val y: Float) : Cmd
     data class Ping(val ts: Long) : Cmd
     data class Delete(val id: String) : Cmd
+    /** The review copy [id] arrived intact and was saved; the Camera can drop it from its outbox. */
+    data class PhotoAck(val id: String) : Cmd
 
     // Camera → Remote
     data class Status(val status: CameraStatus) : Cmd
@@ -128,7 +169,8 @@ sealed interface Cmd {
     data class Countdown(val remaining: Int) : Cmd
     data class Captured(val id: String) : Cmd
     data class ShutterRejected(val reason: String) : Cmd
-    data class Deleted(val id: String) : Cmd
+    /** [ok] = false: the Camera kept its copy (unknown id, another Remote's photo, or delete failed). */
+    data class Deleted(val id: String, val ok: Boolean = true) : Cmd
     /** The Camera closed the session (idle timeout or its user tapped stop); don't auto-reconnect. */
     data class SessionEnded(val reason: String) : Cmd
 
@@ -141,18 +183,20 @@ sealed interface Cmd {
         is Focus -> obj("focus").put("x", x.toDouble()).put("y", y.toDouble())
         is Ping -> obj("ping").put("ts", ts)
         is Delete -> obj("delete").put("id", id)
+        is PhotoAck -> obj("pack").put("id", id)
         is Status -> obj("status").apply {
             put("bat", status.battery); put("chg", status.charging); put("hot", status.hot)
             put("sto", status.storageOk); put("lens", status.lens.wire)
             put("lenses", JSONArray(status.lenses.map { it.wire })); put("paused", status.previewPaused)
             put("lowp", status.lowPower); put("burst", status.burst); put("fps", status.fps)
             put("idleLeft", status.idleLeft); put("safe", status.safeMode)
+            put("muted", status.muted); put("capLeft", status.capLeft); put("sess", status.sessionSec)
         }
         is Pong -> obj("pong").put("ts", ts)
         is Countdown -> obj("count").put("n", remaining)
         is Captured -> obj("captured").put("id", id)
         is ShutterRejected -> obj("rejected").put("reason", reason)
-        is Deleted -> obj("deleted").put("id", id)
+        is Deleted -> obj("deleted").put("id", id).put("ok", ok)
         is SessionEnded -> obj("ended").put("reason", reason)
     }
 
@@ -162,12 +206,18 @@ sealed interface Cmd {
         fun fromJson(o: JSONObject): Cmd? = when (o.optString("t")) {
             "hello" -> Hello(o.optString("name"), o.optInt("idle", 0))
             "alive" -> KeepAlive
-            "shutter" -> Shutter(o.optInt("timer"), o.optBoolean("burst", true))
+            "shutter" -> Shutter(Protocol.clampTimer(o.optInt("timer")), o.optBoolean("burst", true))
             "cancel" -> CancelCountdown
             "lens" -> SetLens(Lens.from(o.optString("lens")))
-            "focus" -> Focus(o.optDouble("x").toFloat(), o.optDouble("y").toFloat())
+            "focus" -> {
+                // optDouble gives NaN when missing or not a number; never pass that to CameraX.
+                val x = o.optDouble("x")
+                val y = o.optDouble("y")
+                if (x.isFinite() && y.isFinite()) Focus(x.toFloat().coerceIn(0f, 1f), y.toFloat().coerceIn(0f, 1f)) else null
+            }
             "ping" -> Ping(o.optLong("ts"))
             "delete" -> Delete(o.optString("id"))
+            "pack" -> PhotoAck(o.optString("id"))
             "status" -> Status(
                 CameraStatus(
                     battery = o.optInt("bat", -1),
@@ -183,13 +233,16 @@ sealed interface Cmd {
                     fps = o.optInt("fps"),
                     idleLeft = o.optInt("idleLeft", -1),
                     safeMode = o.optBoolean("safe", true),
+                    muted = o.optBoolean("muted"),
+                    capLeft = o.optInt("capLeft", -1),
+                    sessionSec = o.optInt("sess"),
                 ),
             )
             "pong" -> Pong(o.optLong("ts"))
             "count" -> Countdown(o.optInt("n"))
             "captured" -> Captured(o.optString("id"))
             "rejected" -> ShutterRejected(o.optString("reason"))
-            "deleted" -> Deleted(o.optString("id"))
+            "deleted" -> Deleted(o.optString("id"), o.optBoolean("ok", true))
             "ended" -> SessionEnded(o.optString("reason"))
             else -> null
         }

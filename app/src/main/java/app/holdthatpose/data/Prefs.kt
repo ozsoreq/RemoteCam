@@ -55,12 +55,12 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("safe", true)
         set(value) = sp.edit { putBoolean("safe", value) }
 
-    /** Seconds without a Remote command before the link drops; 0 = never (only outside safe mode). */
+    /** Seconds without a Remote command before the link drops (0 from older versions = default). */
     var idleTimeoutSec: Int
         get() = sp.getInt("idle", DEFAULT_IDLE)
         set(value) = sp.edit { putInt("idle", value) }
 
-    /** The timeout actually enforced: safe mode never allows "off". */
+    /** The timeout actually enforced: never "off" (see [effectiveTimeout]). */
     val effectiveIdleTimeout: Int
         get() = effectiveTimeout(safeMode, idleTimeoutSec)
 
@@ -71,11 +71,15 @@ class Prefs(context: Context) {
 
     companion object {
         const val DEFAULT_IDLE = 60
-        val IDLE_CHOICES = listOf(30, 60, 120, 300, 600, 0)
+        /** Longest auto-disconnect there is; with safe mode off, "off" (0) means this. */
+        const val MAX_IDLE = 600
+        val IDLE_CHOICES = listOf(30, 60, 120, 300, 600)
 
-        /** Safe mode never allows "off" (0). */
-        fun effectiveTimeout(safeMode: Boolean, configured: Int): Int =
-            if (safeMode && configured <= 0) DEFAULT_IDLE else configured.coerceAtLeast(0)
+        /** Auto-disconnect is never off: 0 means the default (safe mode) or the 10-min maximum. */
+        fun effectiveTimeout(safeMode: Boolean, configured: Int): Int = when {
+            configured <= 0 -> if (safeMode) DEFAULT_IDLE else MAX_IDLE
+            else -> configured.coerceAtMost(MAX_IDLE)
+        }
 
         private const val KEY_INSTALL = "install"
     }

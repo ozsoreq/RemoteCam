@@ -1,13 +1,25 @@
 package app.holdthatpose
 
 import app.holdthatpose.data.Prefs
+import app.holdthatpose.net.CameraStatus
+import app.holdthatpose.net.Cmd
+import app.holdthatpose.net.Lens
 import app.holdthatpose.net.LinkQuality
+import app.holdthatpose.session.CAP_GRACE_MS
+import app.holdthatpose.session.LinkCodes
+import app.holdthatpose.session.SESSION_CAP_MS
+import app.holdthatpose.session.acceptPhoto
+import app.holdthatpose.session.capLeft
+import app.holdthatpose.session.countsAsActivity
 import app.holdthatpose.session.formatDuration
+import app.holdthatpose.session.linkErrorMessage
 import app.holdthatpose.session.signalBars
 import app.holdthatpose.session.stricterTimeout
 import app.holdthatpose.session.tiltFromGravity
 import app.holdthatpose.session.uprightToBuffer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LogicTest {
@@ -18,8 +30,68 @@ class LogicTest {
     fun safeModeNeverAllowsOff() {
         assertEquals(60, Prefs.effectiveTimeout(safeMode = true, configured = 0))
         assertEquals(120, Prefs.effectiveTimeout(safeMode = true, configured = 120))
-        assertEquals(0, Prefs.effectiveTimeout(safeMode = false, configured = 0))
+        // Safe mode off: "off" no longer exists; the maximum is 10 min.
+        assertEquals(600, Prefs.effectiveTimeout(safeMode = false, configured = 0))
         assertEquals(30, Prefs.effectiveTimeout(safeMode = false, configured = 30))
+        assertEquals(600, Prefs.effectiveTimeout(safeMode = false, configured = 3_600))
+        assertFalse(0 in Prefs.IDLE_CHOICES)
+    }
+
+    // ── Session cap ───────────────────────────────────────
+
+    @Test
+    fun capAsksOnlyAfterThirtyMinutes() {
+        assertEquals(-1, capLeft(0, SESSION_CAP_MS, CAP_GRACE_MS))
+        assertEquals(-1, capLeft(SESSION_CAP_MS - 1, SESSION_CAP_MS, CAP_GRACE_MS))
+        assertEquals(60, capLeft(SESSION_CAP_MS, SESSION_CAP_MS, CAP_GRACE_MS))
+        assertEquals(60, capLeft(SESSION_CAP_MS + 1, SESSION_CAP_MS, CAP_GRACE_MS))
+        assertEquals(1, capLeft(SESSION_CAP_MS + CAP_GRACE_MS - 1, SESSION_CAP_MS, CAP_GRACE_MS))
+        assertEquals(0, capLeft(SESSION_CAP_MS + CAP_GRACE_MS, SESSION_CAP_MS, CAP_GRACE_MS))
+        assertEquals(0, capLeft(SESSION_CAP_MS * 5, SESSION_CAP_MS, CAP_GRACE_MS))
+    }
+
+    // ── What keeps a session alive ────────────────────────
+
+    @Test
+    fun onlyDeliberateCommandsCountAsActivity() {
+        listOf(
+            Cmd.Shutter(3, true), Cmd.CancelCountdown, Cmd.SetLens(Lens.Main), Cmd.Focus(0.5f, 0.5f),
+            Cmd.KeepAlive, Cmd.Delete("x"),
+        ).forEach { assertTrue("$it", countsAsActivity(it)) }
+        listOf(
+            Cmd.Ping(1), Cmd.Hello("x", 60), Cmd.Status(CameraStatus()), Cmd.PhotoAck("x"), Cmd.Pong(1),
+        ).forEach { assertFalse("$it", countsAsActivity(it)) }
+    }
+
+    // ── Photo intake on the Remote ────────────────────────
+
+    @Test
+    fun photosAreAcceptedOnlyWhenAskedFor() {
+        // Announced by Captured.
+        assertTrue(acceptPhoto("a", received = emptySet(), captured = setOf("a"), requested = 1))
+        // Link dropped at the moment of capture: no Captured, but we did press the shutter.
+        assertTrue(acceptPhoto("a", received = emptySet(), captured = emptySet(), requested = 1))
+        // Unsolicited: never asked for anything.
+        assertFalse(acceptPhoto("a", received = emptySet(), captured = emptySet(), requested = 0))
+        // More photos than shutters.
+        assertFalse(acceptPhoto("b", received = setOf("a"), captured = emptySet(), requested = 1))
+        // Duplicate (resent after a drop).
+        assertFalse(acceptPhoto("a", received = setOf("a"), captured = setOf("a"), requested = 2))
+        assertFalse(acceptPhoto("", received = emptySet(), captured = emptySet(), requested = 3))
+    }
+
+    // ── Link error messages ───────────────────────────────
+
+    @Test
+    fun linkErrorsAreActionable() {
+        assertEquals("Couldn't search", linkErrorMessage("Couldn't search", null))
+        assertEquals("Needs Google Play services", linkErrorMessage("x", LinkCodes.API_UNAVAILABLE))
+        assertEquals("Needs Google Play services", linkErrorMessage("x", LinkCodes.SERVICE_MISSING))
+        assertEquals("Needs Google Play services", linkErrorMessage("x", LinkCodes.SERVICE_VERSION_UPDATE_REQUIRED))
+        assertEquals("Turn on Bluetooth and Wi-Fi", linkErrorMessage("x", LinkCodes.STATUS_RADIO_ERROR))
+        assertEquals("Turn on Location", linkErrorMessage("x", LinkCodes.MISSING_SETTING_LOCATION_MUST_BE_ON))
+        assertEquals("Permission needed", linkErrorMessage("x", 8030))
+        assertEquals("Couldn't reach it", linkErrorMessage("Couldn't reach it", 13))
     }
 
     @Test
