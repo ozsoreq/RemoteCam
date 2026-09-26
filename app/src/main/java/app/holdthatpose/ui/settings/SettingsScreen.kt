@@ -74,7 +74,7 @@ import app.holdthatpose.ui.theme.PoseType
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Unit) {
+fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Unit, onPrivacy: () -> Unit) {
     val context = LocalContext.current
     var safe by remember { mutableStateOf(prefs.safeMode) }
     var idle by remember { mutableIntStateOf(prefs.idleTimeoutSec) }
@@ -175,14 +175,7 @@ fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Uni
             // ── About ───────────────────────────────────
             Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp)) {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    AboutRow("Privacy policy") {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(context.getString(R.string.privacy_policy_url)))
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        }
-                    }
+                    AboutRow("Privacy policy", onClick = onPrivacy)
                     AboutRow("Licences") { licences = true }
                     Text(
                         "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",

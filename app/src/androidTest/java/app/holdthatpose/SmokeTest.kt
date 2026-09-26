@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -77,6 +78,15 @@ class SmokeTest {
             compose.waitForIdle()
             assertEquals(true, prefs.getBoolean("safe", false))
             assertEquals(120, prefs.getInt("idle", 0))
+
+            // Privacy policy opens in-app (bundled, works offline) and returns to Settings
+            compose.onNodeWithText("Privacy policy").performScrollTo().performClick()
+            compose.waitForIdle()
+            compose.screenshot("08_privacy_policy")
+            compose.onNodeWithText("Privacy Policy").assertIsDisplayed()
+            compose.onNodeWithText("In short").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Back").performClick()
+            compose.onNodeWithText("Safe mode").assertIsDisplayed()
 
             // Back home, pick Remote → agreement first
             compose.onNodeWithContentDescription("Back").performClick()

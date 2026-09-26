@@ -5,7 +5,8 @@
     <string name="notif_camera">Camera is on — waiting for a Remote</string>
     <string name="notif_remote">Remote is connected to your Camera</string>
     <string name="notif_stop">Stop</string>
-    <!-- Placeholder: the owner must publish the policy and replace this URL before release. -->
-    <string name="privacy_policy_url">https://holdthatpose.app/privacy</string>
+    <!-- Public copy of docs/legal/privacy-policy.md, served by GitHub Pages (source: /docs).
+         The same file ships inside the app (Settings → Privacy policy), so it works offline. -->
+    <string name="privacy_policy_url" translatable="false">https://ozsoreq.github.io/RemoteCam/legal/privacy-policy.html</string>
     <string name="play_store_url">https://play.google.com/store/apps/details?id=app.holdthatpose</string>
 </resources>

@@ -57,6 +57,14 @@ This is product-level risk reduction, not legal advice — have a lawyer review 
 listing, privacy policy and terms before launch (Play requires a privacy policy for apps
 using the camera).
 
+## Privacy
+
+The privacy policy is `docs/legal/privacy-policy.md`, one file used in two places: it is bundled into the
+app (Settings → Privacy policy, readable offline) and published on the web via GitHub Pages at
+https://ozsoreq.github.io/RemoteCam/legal/privacy-policy.html. See `docs/play-console-privacy.md` for the
+one-time Pages setup and suggested Play Console Data safety answers. A unit test keeps the required
+sections from going missing.
+
 ## Design
 
 Dark "ink" surfaces, soft off-white type and one blue accent (sky → azure)

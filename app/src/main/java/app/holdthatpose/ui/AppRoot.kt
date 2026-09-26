@@ -29,6 +29,7 @@ import app.holdthatpose.ui.permissions.PermissionScreen
 import app.holdthatpose.ui.permissions.missingPermissions
 import app.holdthatpose.ui.remote.RemoteScreen
 import app.holdthatpose.ui.settings.ConsentScreen
+import app.holdthatpose.ui.settings.PrivacyPolicyScreen
 import app.holdthatpose.ui.settings.SettingsScreen
 import app.holdthatpose.ui.theme.PoseColors
 
@@ -40,6 +41,7 @@ sealed interface Screen {
     data object RemotePairing : Screen
     data object Remote : Screen
     data object Settings : Screen
+    data object Privacy : Screen
     /** [then] = role waiting on the agreement; null = read-only from Settings. */
     data class Consent(val then: Role?) : Screen
 }
@@ -52,6 +54,7 @@ private fun Screen.key(): String = when (this) {
     Screen.RemotePairing -> "pairing"
     Screen.Remote -> "remote"
     Screen.Settings -> "settings"
+    Screen.Privacy -> "privacy"
     is Screen.Consent -> "consent:${then?.name.orEmpty()}"
 }
 
@@ -65,6 +68,7 @@ private fun screenOf(key: String): Screen? {
         key == "pairing" -> Screen.RemotePairing
         key == "remote" -> Screen.Remote
         key == "settings" -> Screen.Settings
+        key == "privacy" -> Screen.Privacy
         key.startsWith("consent:") -> Screen.Consent(role(key.removePrefix("consent:")))
         else -> null
     }
@@ -124,6 +128,7 @@ fun AppRoot(app: PoseApp, activity: MainActivity) {
             when (val s = screen) {
                 Screen.Remote -> Screen.RemotePairing
                 is Screen.Consent -> if (s.then == null) Screen.Settings else Screen.Home
+                Screen.Privacy -> Screen.Settings
                 else -> Screen.Home
             },
         )
@@ -148,10 +153,12 @@ fun AppRoot(app: PoseApp, activity: MainActivity) {
                 onHowItWorks = { navigate(Screen.Onboarding) },
                 onSettings = { navigate(Screen.Settings) },
             )
+            Screen.Privacy -> PrivacyPolicyScreen(onBack = { navigate(Screen.Settings) })
             Screen.Settings -> SettingsScreen(
                 app.prefs,
                 onBack = { navigate(Screen.Home) },
                 onResponsibleUse = { navigate(Screen.Consent(null)) },
+                onPrivacy = { navigate(Screen.Privacy) },
             )
             is Screen.Consent -> ConsentScreen(
                 onAgree = s.then?.let { role ->

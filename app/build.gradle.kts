@@ -34,6 +34,10 @@ android {
         }
     }
 
+    // The privacy policy has one source of truth, docs/legal/privacy-policy.md: it is published
+    // on the web and bundled here as an asset for the in-app, offline policy screen.
+    sourceSets["main"].assets.srcDirs("src/main/assets", "../docs/legal")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
