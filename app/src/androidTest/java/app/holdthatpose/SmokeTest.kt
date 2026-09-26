@@ -3,8 +3,10 @@ package app.holdthatpose
 import android.Manifest
 import android.content.Context
 import android.os.Build
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -53,25 +55,27 @@ class SmokeTest {
             compose.onNodeWithText("Camera").assertIsDisplayed()
             compose.onNodeWithText("Remote").assertIsDisplayed()
 
-            // Settings: safe mode on by default, "Off" can't be chosen
+            // Settings: safe mode on by default; auto-disconnect has no "Off" in any mode
             compose.onNodeWithContentDescription("Settings").performClick()
             compose.screenshot("03_settings")
             compose.onNodeWithText("Safe mode").assertIsDisplayed()
-            compose.onNodeWithText("Off").performClick()
-            assertEquals(60, prefs.getInt("idle", 60))
+            compose.onAllNodesWithText("Off").assertCountEquals(0)
             compose.onNodeWithText("2 min").performClick()
             assertEquals(120, prefs.getInt("idle", 0))
 
-            // Safe mode off → "Off" allowed; back on → timeout restored
+            // Turning safe mode off needs a confirmation; turning it back on doesn't
             compose.onNodeWithContentDescription("Safe mode switch").performClick()
             compose.waitForIdle()
+            assertEquals(true, prefs.getBoolean("safe", true))
+            compose.screenshot("03b_settings_confirm_off")
+            compose.onNodeWithText("Turn off").performClick()
+            compose.waitForIdle()
             assertEquals(false, prefs.getBoolean("safe", true))
-            compose.onNodeWithText("Off").performClick()
-            assertEquals(0, prefs.getInt("idle", -1))
+            compose.onAllNodesWithText("Off").assertCountEquals(0)
             compose.onNodeWithContentDescription("Safe mode switch").performClick()
             compose.waitForIdle()
             assertEquals(true, prefs.getBoolean("safe", false))
-            assertEquals(60, prefs.getInt("idle", 0))
+            assertEquals(120, prefs.getInt("idle", 0))
 
             // Back home, pick Remote → agreement first
             compose.onNodeWithContentDescription("Back").performClick()

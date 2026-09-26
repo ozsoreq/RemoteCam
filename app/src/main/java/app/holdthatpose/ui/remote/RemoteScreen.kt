@@ -1,6 +1,7 @@
 package app.holdthatpose.ui.remote
 
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -59,12 +60,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.holdthatpose.PoseApp
 import app.holdthatpose.MainActivity
 import app.holdthatpose.net.LinkQuality
+import app.holdthatpose.net.Protocol
 import app.holdthatpose.session.LinkPhase
 import app.holdthatpose.session.WARNING_SECONDS
 import app.holdthatpose.ui.components.BatteryIndicator
@@ -92,7 +97,7 @@ import app.holdthatpose.ui.theme.PoseType
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-private val timerSteps = listOf(0, 3, 5, 10)
+private val timerSteps = Protocol.TIMER_STEPS
 
 /** The phone in your hand: live view, framing aids and the shutter. */
 @Composable
@@ -110,6 +115,7 @@ fun RemoteScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
     val rtt by session.rtt.collectAsState()
     val fps by session.fps.collectAsState()
     val quality by app.link.quality.collectAsState()
+    val pendingDelete by session.pendingDelete.collectAsState()
 
     var grid by remember { mutableStateOf(prefs.grid) }
     var level by remember { mutableStateOf(prefs.level) }
@@ -132,15 +138,37 @@ fun RemoteScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
         }
     }
     DisposableEffect(Unit) {
-        activity.volumeShutter = { session.shutter(timer, burst) }
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
             activity.volumeShutter = null
             activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
-    // Volume shutter must see the latest timer/burst.
-    LaunchedEffect(timer, burst) { activity.volumeShutter = { session.shutter(timer, burst) } }
+    // Volume keys fire the shutter only on the live view (not in Review, not once the link is gone),
+    // and always with the latest timer/burst.
+    val volumeEnabled = (phase is LinkPhase.Live || phase is LinkPhase.Reconnecting) && reviewing == null
+    LaunchedEffect(timer, burst, volumeEnabled) {
+        val fromKey: () -> Unit = { session.shutter(timer, burst) }
+        activity.volumeShutter = if (volumeEnabled) fromKey else null
+    }
+    // System Back closes Review instead of leaving the session.
+    BackHandler(enabled = reviewing != null) { reviewing = null }
+    // The live view of someone else can't be screenshotted or screen-recorded; Review can.
+    val liveViewShowing = reviewing == null
+    DisposableEffect(liveViewShowing) {
+        if (liveViewShowing) {
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose { activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
+    // Full brightness while live, so the preview is readable in the sun.
+    val isLive = phase is LinkPhase.Live
+    DisposableEffect(isLive) {
+        setWindowBrightness(activity, if (isLive) 1f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+        onDispose { setWindowBrightness(activity, WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) }
+    }
 
     val counting = (countdown ?: 0) > 0
     val bars = session.signalBars(quality, rtt)
@@ -237,7 +265,10 @@ fun RemoteScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
 
                     // Notices on top of the frame
                     Column(
-                        Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 12.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
@@ -276,14 +307,14 @@ fun RemoteScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                GlassIconButton(PoseIcons.Grid, "Grid", { grid = !grid; prefs.grid = grid }, active = grid, size = 40.dp)
-                GlassIconButton(PoseIcons.Level, "Level", { level = !level; prefs.level = level }, active = level, size = 40.dp)
-                GlassIconButton(PoseIcons.Mirror, "Mirror", { mirror = !mirror; prefs.mirror = mirror }, active = mirror, size = 40.dp)
-                GlassIconButton(PoseIcons.Burst, "Best-of-3 burst", { burst = !burst; prefs.burst = burst }, active = burst, size = 40.dp)
+                GlassIconButton(PoseIcons.Grid, "Grid", { grid = !grid; prefs.grid = grid }, active = grid, size = 40.dp, toggle = true)
+                GlassIconButton(PoseIcons.Level, "Level", { level = !level; prefs.level = level }, active = level, size = 40.dp, toggle = true)
+                GlassIconButton(PoseIcons.Mirror, "Mirror", { mirror = !mirror; prefs.mirror = mirror }, active = mirror, size = 40.dp, toggle = true)
+                GlassIconButton(PoseIcons.Burst, "Best-of-3 burst", { burst = !burst; prefs.burst = burst }, active = burst, size = 40.dp, toggle = true)
                 Box(Modifier.weight(1f))
                 val st = status
                 if (st != null) {
-                    LensPicker(st.lenses, st.lens, onSelect = session::setLens)
+                    LensPicker(st.lenses, st.lens, onSelect = session::setLens, enabled = !counting && !awaiting)
                 }
             }
 
@@ -321,8 +352,8 @@ fun RemoteScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
                 shots = shots,
                 start = reviewing ?: 0,
                 onClose = { reviewing = null },
-                onDelete = { shot ->
-                    session.delete(shot)
+                onDelete = { shot, alsoCamera ->
+                    session.scheduleDelete(shot, alsoCamera)
                     if (shots.size <= 1) reviewing = null
                 },
                 onRetake = {
@@ -331,7 +362,35 @@ fun RemoteScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
                 },
             )
         }
+
+        // "Deleted · Undo" for 5 s, over the live view and Review alike.
+        AnimatedVisibility(
+            pendingDelete != null,
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 112.dp),
+            enter = fadeIn() + scaleIn(initialScale = 0.9f),
+            exit = fadeOut(),
+        ) {
+            Glass(
+                Modifier.height(44.dp).pressable(onClick = session::undoDelete),
+                shape = CircleShape,
+                tint = PoseColors.Ink2.copy(alpha = 0.94f),
+            ) {
+                Text(
+                    "Deleted · Undo",
+                    style = PoseType.Label,
+                    color = PoseColors.Paper,
+                    modifier = Modifier.align(Alignment.Center).padding(horizontal = 18.dp),
+                )
+            }
+        }
     }
+}
+
+private fun setWindowBrightness(activity: MainActivity, value: Float) {
+    val lp = activity.window.attributes
+    if (lp.screenBrightness == value) return
+    lp.screenBrightness = value
+    activity.window.attributes = lp
 }
 
 @Composable
@@ -394,6 +453,9 @@ private fun Notices(
             if (!status.storageOk) add("Camera storage full" to Tone.Bad)
             if (status.hot) add("Camera is hot · preview slowed" to Tone.Warn)
             if (status.previewPaused) add("Camera paused" to Tone.Warn)
+            if (status.muted) add("Camera is muted" to Tone.Warn)
+            if (status.capLeft >= 0) add("Continue on the Camera · ${status.capLeft}s" to Tone.Warn)
+            if (!status.safeMode) add("Safe mode off" to Tone.Warn)
         }
         if (bumped) add("Camera moved" to Tone.Bad)
         if (lowQuality) add("Low quality preview" to Tone.Warn)
@@ -445,7 +507,13 @@ private fun ReconnectVeil(phase: LinkPhase, onRetry: () -> Unit, onExit: () -> U
                     VSpace(14.dp)
                     Text("Reconnecting…", style = PoseType.TitleSmall, color = PoseColors.Paper)
                     VSpace(6.dp)
-                    Text("Tap the shutter to queue a shot", style = PoseType.Caption, color = PoseColors.PaperDim, textAlign = TextAlign.Center)
+                    val awaitingAllow = (phase as? LinkPhase.Reconnecting)?.awaitingAllow == true
+                    Text(
+                        if (awaitingAllow) "Tap Allow on the Camera" else "Tap the shutter to queue a shot",
+                        style = PoseType.Caption,
+                        color = PoseColors.PaperDim,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
         }
@@ -490,7 +558,7 @@ private fun IdleWarning(secondsLeft: Int, visible: Boolean, onKeepGoing: () -> U
     val show = visible && secondsLeft in 0..WARNING_SECONDS
     AnimatedVisibility(
         show,
-        modifier = modifier.padding(12.dp),
+        modifier = modifier.padding(12.dp).semantics { liveRegion = LiveRegionMode.Polite },
         enter = fadeIn() + scaleIn(initialScale = 0.9f),
         exit = fadeOut(),
     ) {

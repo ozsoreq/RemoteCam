@@ -23,6 +23,8 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import app.holdthatpose.net.Lens
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,6 +99,16 @@ class CameraController(private val context: Context) {
     fun attach(owner: LifecycleOwner, view: PreviewView, preferred: Lens) {
         this.owner = owner
         this.previewView = view
+        // CameraX unbinds by itself when the activity is destroyed (e.g. recreated); make
+        // [bound] say so until the new screen attaches again.
+        owner.lifecycle.addObserver(
+            LifecycleEventObserver { source, event ->
+                if (event == Lifecycle.Event.ON_DESTROY && this.owner === source) {
+                    _bound.value = false
+                    camera = null
+                }
+            },
+        )
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             val p = runCatching { future.get() }.getOrNull() ?: return@addListener

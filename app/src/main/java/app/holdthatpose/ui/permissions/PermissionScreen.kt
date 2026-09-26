@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -88,6 +90,7 @@ fun PermissionScreen(role: Role, onGranted: () -> Unit, onBack: () -> Unit) {
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
         ) {
             VSpace(12.dp)
@@ -132,7 +135,7 @@ fun PermissionScreen(role: Role, onGranted: () -> Unit, onBack: () -> Unit) {
                     }
                 }
             }
-            Box(Modifier.weight(1f))
+            VSpace(24.dp)
             if (blocked) {
                 Text(
                     "Android won't ask again. Turn on ${groups.filter { g -> g.permissions.any { it in missing } }.joinToString { it.title }} in Settings → Permissions.",

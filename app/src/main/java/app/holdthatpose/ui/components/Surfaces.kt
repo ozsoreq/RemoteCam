@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -145,7 +147,7 @@ fun SecondaryButton(
     }
 }
 
-/** Round glass button for overlay toggles; [active] lights it with the accent. */
+/** Round glass button for overlay toggles; [active] lights it with the accent; [toggle] exposes on/off to TalkBack. */
 @Composable
 fun GlassIconButton(
     icon: ImageVector,
@@ -155,10 +157,13 @@ fun GlassIconButton(
     active: Boolean = false,
     size: Dp = 44.dp,
     enabled: Boolean = true,
+    toggle: Boolean = false,
 ) {
     val tint by animateFloatAsState(if (active) 1f else 0f, tween(220), label = "active")
+    // Toggles (grid, level, …) tell TalkBack whether they're on.
+    val state = if (toggle) Modifier.semantics { stateDescription = if (active) "On" else "Off" } else Modifier
     Glass(
-        modifier.size(size).pressable(enabled = enabled, pressedScale = 0.88f, onClick = onClick),
+        modifier.size(size).then(state).pressable(enabled = enabled, pressedScale = 0.88f, onClick = onClick),
         shape = CircleShape,
         tint = if (active) PoseColors.Sky.copy(alpha = 0.16f) else PoseColors.Glass,
         border = if (active) Brush.linearGradient(listOf(PoseColors.Sky.copy(0.7f), PoseColors.Azure.copy(0.3f))) else PoseColors.HairlineBrush,

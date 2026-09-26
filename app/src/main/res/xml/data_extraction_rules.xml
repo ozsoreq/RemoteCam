@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trust (last paired phone, install id) and consent must not be cloned to a new phone. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="holdthatpose.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="holdthatpose.xml" />
+    </device-transfer>
+</data-extraction-rules>

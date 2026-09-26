@@ -142,6 +142,26 @@ class PhotoStore(private val context: Context) {
             return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
         }
 
+        /**
+         * Decodes a JPEG to at most [maxSide] px on its long side: a cheap power-of-two
+         * subsample first, then an exact scale, so memory stays bounded whatever arrives.
+         */
+        fun decodeScaled(bytes: ByteArray, maxSide: Int): Bitmap? {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+            val opts = BitmapFactory.Options().apply { inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight, maxSide) }
+            val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) ?: return null
+            val long = max(decoded.width, decoded.height)
+            if (long <= maxSide) return decoded
+            val scale = maxSide.toFloat() / long
+            val w = (decoded.width * scale).toInt().coerceAtLeast(1)
+            val h = (decoded.height * scale).toInt().coerceAtLeast(1)
+            val scaled = Bitmap.createScaledBitmap(decoded, w, h, true)
+            if (scaled !== decoded) decoded.recycle()
+            return scaled
+        }
+
         fun fileName(takenAt: Long): String {
             val f = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US)
             return "HoldThatPose_" + f.format(java.util.Date(takenAt))

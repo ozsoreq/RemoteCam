@@ -8,7 +8,10 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 
-/** Countdown beeps loud enough to hear from 20 m, plus a light haptic tick on the Remote. */
+/**
+ * Countdown beeps loud enough to hear from 20 m, plus a light haptic tick on the Remote.
+ * Tones use the alarm stream; [AlarmGuard] keeps it audible while the Camera runs.
+ */
 class Beeper(context: Context) {
     private val tone: ToneGenerator? = runCatching { ToneGenerator(AudioManager.STREAM_ALARM, 100) }.getOrNull()
 
@@ -30,6 +33,11 @@ class Beeper(context: Context) {
     /** Audible cue near the Camera when a Remote connects (up) or the session ends (down). */
     fun chime(up: Boolean) {
         tone?.startTone(if (up) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_NACK, 300)
+    }
+
+    /** Short, quieter cue when the in-session Remote comes back after a drop. */
+    fun softChime() {
+        tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
     }
 
     fun haptic(strong: Boolean = false) {

@@ -2,6 +2,8 @@ package app.holdthatpose.net
 
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import com.google.android.gms.nearby.Nearby
@@ -31,6 +33,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import app.holdthatpose.session.PENDING_TIMEOUT_MS
+import app.holdthatpose.session.linkErrorMessage
 import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicLong
 
@@ -103,15 +107,33 @@ class NearbyLink(context: Context, private val installId: String) {
     /** Decides whether an incoming or outgoing handshake can skip the confirm step. */
     var autoAccept: (peer: Peer, incoming: Boolean) -> Boolean = { _, _ -> false }
 
+    /**
+     * Install id of the Remote allowed to replace an unconfirmed stranger's handshake (the
+     * in-session Remote coming back after a drop). Set by the Camera session.
+     */
+    @Volatile var preferredPeerId: String? = null
+
+    /** Bumped by every start; lets a delayed [stopAllIf] skip if a new session started meanwhile. */
+    @Volatile var generation = 0
+        private set
+
+    /** Which side this phone is on in the current session (set on start / connect). */
+    @Volatile private var localRole: Role? = null
+
     private val pendingPeers = mutableMapOf<String, Peer>()
+    /** Handshakes this phone rejected itself, so their failure isn't shown as "declined". */
+    private val rejectedLocally = mutableSetOf<String>()
     private val frameInFlight = AtomicLong(0L)
     @Volatile private var frameSentAt = 0L
+    private val main = Handler(Looper.getMainLooper())
 
     fun localName(role: Role) = "${role.code}|$installId|$deviceName"
 
     // region Advertising / discovery
 
     fun startAdvertising(role: Role) {
+        localRole = role
+        generation++
         if (_advertising.value) return
         _advertising.value = true
         client.startAdvertising(
@@ -131,6 +153,7 @@ class NearbyLink(context: Context, private val installId: String) {
     }
 
     fun startDiscovery() {
+        generation++
         if (_discovering.value) return
         _discovering.value = true
         _discovered.value = emptyList()
@@ -156,13 +179,17 @@ class NearbyLink(context: Context, private val installId: String) {
 
     fun connect(peer: Peer, role: Role) {
         if (_connection.value !is Connection.None) return
+        localRole = role
+        generation++
         pendingPeers[peer.endpointId] = peer
-        _connection.value = Connection.Pending(peer, code = "", incoming = false, accepted = false)
+        setPending(Connection.Pending(peer, code = "", incoming = false, accepted = false))
         client.requestConnection(localName(role), peer.endpointId, lifecycle)
             .addOnFailureListener { e ->
                 val code = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
                 if (code != ConnectionsStatusCodes.STATUS_ALREADY_CONNECTED_TO_ENDPOINT) {
-                    _connection.value = Connection.None
+                    if ((_connection.value as? Connection.Pending)?.peer?.endpointId == peer.endpointId) {
+                        _connection.value = Connection.None
+                    }
                     fail("Couldn't reach ${peer.name}", e)
                 }
             }
@@ -172,14 +199,35 @@ class NearbyLink(context: Context, private val installId: String) {
     fun acceptPending() {
         val pending = _connection.value as? Connection.Pending ?: return
         if (pending.accepted) return
-        _connection.value = pending.copy(accepted = true)
+        setPending(pending.copy(accepted = true))
         client.acceptConnection(pending.peer.endpointId, payloads)
     }
 
     fun rejectPending() {
         val pending = _connection.value as? Connection.Pending ?: return
-        client.rejectConnection(pending.peer.endpointId)
+        rejectedLocally += pending.peer.endpointId
+        if (pending.code.isEmpty() || pending.accepted) {
+            // Nothing to reject (our request is still in flight) or we already accepted: hang up.
+            client.disconnectFromEndpoint(pending.peer.endpointId)
+        } else {
+            client.rejectConnection(pending.peer.endpointId)
+        }
         _connection.value = Connection.None
+    }
+
+    /**
+     * Every handshake state goes through here so it gets a timeout: if nobody confirms within
+     * [PENDING_TIMEOUT_MS], the handshake is dropped (the same Pending must still be current).
+     */
+    private fun setPending(p: Connection.Pending) {
+        _connection.value = p
+        main.postDelayed({
+            if (_connection.value === p) {
+                rejectedLocally += p.peer.endpointId
+                client.disconnectFromEndpoint(p.peer.endpointId)
+                _connection.value = Connection.None
+            }
+        }, PENDING_TIMEOUT_MS)
     }
 
     fun disconnect() {
@@ -193,6 +241,7 @@ class NearbyLink(context: Context, private val installId: String) {
     }
 
     fun stopAll() {
+        localRole = null
         client.stopAllEndpoints()
         _advertising.value = false
         _discovering.value = false
@@ -200,6 +249,11 @@ class NearbyLink(context: Context, private val installId: String) {
         _discovered.value = emptyList()
         _quality.value = LinkQuality.Unknown
         frameInFlight.set(0)
+    }
+
+    /** [stopAll], unless something started a new advert/discovery/connect since [gen] was read. */
+    fun stopAllIf(gen: Int) {
+        if (gen == generation) stopAll()
     }
 
     fun clearError() {
@@ -263,23 +317,53 @@ class NearbyLink(context: Context, private val installId: String) {
             val peer = parsePeer(endpointId, info.endpointName)
                 ?: pendingPeers[endpointId]
                 ?: Peer(endpointId, Role.Remote, "", info.endpointName)
+            // One handshake at a time: a second phone can't overwrite the code on screen.
+            when (val current = _connection.value) {
+                is Connection.Connected -> if (current.peer.endpointId != endpointId) {
+                    client.rejectConnection(endpointId)
+                    return
+                }
+                is Connection.Pending -> if (current.peer.endpointId != endpointId) {
+                    val strangerWaiting = !current.accepted && current.peer.installId != preferredPeerId
+                    val returning = peer.installId.isNotEmpty() && peer.installId == preferredPeerId
+                    if (strangerWaiting && returning) {
+                        // The in-session Remote is back: it wins over an unconfirmed stranger.
+                        rejectedLocally += current.peer.endpointId
+                        client.rejectConnection(current.peer.endpointId)
+                    } else {
+                        client.rejectConnection(endpointId)
+                        return
+                    }
+                }
+                Connection.None -> Unit
+            }
             pendingPeers[endpointId] = peer
             val auto = autoAccept(peer, info.isIncomingConnection)
-            _connection.value = Connection.Pending(peer, info.authenticationDigits, info.isIncomingConnection, accepted = auto)
+            setPending(Connection.Pending(peer, info.authenticationDigits, info.isIncomingConnection, accepted = auto))
             if (auto) client.acceptConnection(endpointId, payloads)
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             val peer = pendingPeers[endpointId]
+            val isCurrent = (_connection.value as? Connection.Pending)?.peer?.endpointId == endpointId
             if (result.status.statusCode == ConnectionsStatusCodes.STATUS_OK && peer != null) {
+                if (!isCurrent || endpointId in rejectedLocally) {
+                    // Cancelled, timed out or replaced on this phone meanwhile: don't let it in.
+                    rejectedLocally.remove(endpointId)
+                    client.disconnectFromEndpoint(endpointId)
+                    return
+                }
                 _connection.value = Connection.Connected(peer)
                 frameInFlight.set(0)
             } else {
                 if ((_connection.value as? Connection.Pending)?.peer?.endpointId == endpointId) {
                     _connection.value = Connection.None
                 }
-                if (result.status.statusCode == ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED) {
-                    _error.value = "The other phone declined the connection"
+                val rejectedHere = rejectedLocally.remove(endpointId)
+                if (result.status.statusCode == ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED &&
+                    !rejectedHere && localRole == Role.Remote
+                ) {
+                    _error.value = "Camera declined"
                 }
             }
         }
@@ -315,6 +399,11 @@ class NearbyLink(context: Context, private val installId: String) {
                     null -> Unit
                 }
                 Payload.Type.STREAM -> {
+                    // Only the Remote receives photos; a Camera never reads a pushed stream.
+                    if (localRole == Role.Camera) {
+                        client.cancelPayload(payload.id)
+                        return
+                    }
                     val input = payload.asStream()?.asInputStream() ?: return
                     scope.launch {
                         runCatching { input.use { Protocol.readPhotoStream(it) } }
@@ -343,7 +432,7 @@ class NearbyLink(context: Context, private val installId: String) {
     private fun fail(message: String, e: Exception) {
         Log.w(TAG, message, e)
         val code = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
-        _error.value = if (code == null) message else "$message — check Bluetooth and Wi-Fi are on"
+        _error.value = linkErrorMessage(message, code)
     }
 
     private companion object {

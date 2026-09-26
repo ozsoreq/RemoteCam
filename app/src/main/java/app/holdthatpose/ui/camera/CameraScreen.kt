@@ -1,7 +1,9 @@
 package app.holdthatpose.ui.camera
 
 import android.app.Activity
+import android.os.Build
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -11,6 +13,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -23,11 +26,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -39,6 +45,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,6 +62,10 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -83,7 +94,9 @@ import app.holdthatpose.ui.components.Overline
 import app.holdthatpose.ui.components.StatusDot
 import app.holdthatpose.ui.components.Tone
 import app.holdthatpose.ui.components.VSpace
+import app.holdthatpose.ui.components.pressable
 import app.holdthatpose.ui.icons.PoseIcons
+import app.holdthatpose.ui.permissions.RadioNotices
 import app.holdthatpose.ui.theme.PoseColors
 import app.holdthatpose.ui.theme.PoseType
 import kotlinx.coroutines.delay
@@ -96,25 +109,41 @@ fun CameraScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
     val context = LocalContext.current
     val session = app.cameraSession
     val lifecycleOwner = LocalLifecycleOwner.current
+    val view = LocalView.current
 
     val connection by app.link.connection.collectAsState()
     val advertising by app.link.advertising.collectAsState()
     val linkError by app.link.error.collectAsState()
     val countdown by session.countdown.collectAsState()
+    val saving by session.saving.collectAsState()
     val flash by session.captureFlash.collectAsState()
     val lastSaved by session.lastSaved.collectAsState()
     val bound by session.controller.bound.collectAsState()
     val idleLeft by session.idleLeft.collectAsState()
+    val capLeft by session.capLeft.collectAsState()
+    val sessionSec by session.sessionSec.collectAsState()
+    val muted by session.muted.collectAsState()
     val ended by session.ended.collectAsState()
     val safeMode = remember { app.prefs.safeMode }
 
     var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var dimmed by remember { mutableStateOf(false) }
     var locked by remember { mutableStateOf(false) }
+    var confirmLeave by remember { mutableStateOf(false) }
     var focusAt by remember { mutableStateOf<Offset?>(null) }
     var focusKey by remember { mutableIntStateOf(0) }
     var quadrant by remember { mutableIntStateOf(0) }
+    val notices = remember { mutableStateListOf<String>() }
     val connected = connection is Connection.Connected
+    val pendingNow = connection is Connection.Pending
+    val asking = connected && capLeft >= 0
+    val busy = countdown != null || saving
+
+    // Leaving mid-shot would lose the photo: ask first.
+    val leave = { if (busy) confirmLeave = true else onExit() }
+    BackHandler(enabled = !locked && busy) { confirmLeave = true }
+    // Locked means locked: Back does nothing (the LIVE Stop chip still works).
+    BackHandler(enabled = locked) {}
 
     LaunchedEffect(Unit) {
         SessionService.start(context, Role.Camera)
@@ -124,6 +153,13 @@ fun CameraScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
         while (true) {
             quadrant = session.level.quadrant
             delay(300)
+        }
+    }
+    LaunchedEffect(Unit) {
+        session.notices.collect { msg ->
+            notices.add(msg)
+            delay(2_000)
+            notices.remove(msg)
         }
     }
 
@@ -144,20 +180,31 @@ fun CameraScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
             setBrightness(activity, WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
         }
     }
+    // Other apps can't draw over the Camera (hiding LIVE) or tap through it.
+    DisposableEffect(view) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) runCatching { activity.window.setHideOverlayWindows(true) }
+        view.filterTouchesWhenObscured = true
+        onDispose {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) runCatching { activity.window.setHideOverlayWindows(false) }
+            view.filterTouchesWhenObscured = false
+        }
+    }
 
-    // Auto-dim after 10 s untouched (saves battery on the rock); capture keeps working.
-    LaunchedEffect(lastTouch, connected, countdown) {
+    // Auto-dim when untouched (saves battery on the rock); capture keeps working. Never while
+    // counting down, asking to Allow a Remote or asking "Still OK?".
+    LaunchedEffect(lastTouch, connected, pendingNow, countdown, asking) {
         dimmed = false
-        if (!connected || countdown != null) return@LaunchedEffect
-        delay(10_000)
+        if (countdown != null || pendingNow || asking) return@LaunchedEffect
+        delay(if (connected) 10_000 else 60_000)
         dimmed = true
     }
-    LaunchedEffect(dimmed, countdown) {
+    LaunchedEffect(dimmed, countdown, connected) {
         setBrightness(
             activity,
             when {
                 countdown != null -> 1f
-                dimmed -> 0.01f
+                // Safe mode keeps the LIVE sign readable to people near the Camera.
+                dimmed -> if (connected && safeMode) 0.12f else 0.01f
                 else -> WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             },
         )
@@ -218,7 +265,7 @@ fun CameraScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
                 Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlassIconButton(PoseIcons.Close, "Leave", onExit)
+                GlassIconButton(PoseIcons.Close, "Leave", leave)
                 Box(Modifier.weight(1f))
                 GlassIconButton(PoseIcons.Lock, "Lock screen", { locked = true })
             }
@@ -226,7 +273,11 @@ fun CameraScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
 
         // Pause / error notices
         Column(
-            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 70.dp),
+            Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = if (connected) 116.dp else 70.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -234,7 +285,10 @@ fun CameraScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
             if (connected && idleLeft in 0..WARNING_SECONDS) {
                 NoticePill("Disconnecting in ${idleLeft}s", Tone.Warn, pulse = true)
             }
+            if (muted) NoticePill("Sound off", Tone.Warn)
             linkError?.let { NoticePill(it, Tone.Bad) }
+            if (!connected) RadioNotices()
+            notices.forEach { NoticePill(it, Tone.Neutral) }
             SavedToast(lastSaved)
         }
 
@@ -248,25 +302,18 @@ fun CameraScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
             WaitingCard(
                 deviceName = app.link.deviceName,
                 advertising = advertising,
+                linkError = linkError,
                 pending = (connection as? Connection.Pending)?.takeIf { it.code.isNotEmpty() },
                 ended = ended,
                 onAccept = session::acceptRemote,
                 onDecline = session::declineRemote,
                 onRestart = session::restart,
+                onRetry = session::retryAdvertising,
             )
         }
 
         // Countdown — a pulsing warm field with a huge numeral, readable from 20 m.
         CountdownField(countdown, quadrant)
-
-        // Shutter blink
-        val blink = remember { Animatable(0f) }
-        LaunchedEffect(flash) {
-            if (flash == 0) return@LaunchedEffect
-            blink.snapTo(0.95f)
-            blink.animateTo(0f, tween(420))
-        }
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = blink.value }.background(Color.White))
 
         // Dimmed standby
         AnimatedVisibility(dimmed && !locked, enter = fadeIn(tween(900)), exit = fadeOut(tween(200))) {
@@ -290,15 +337,64 @@ fun CameraScreen(app: PoseApp, activity: MainActivity, onExit: () -> Unit) {
             LockOverlay(dimmed = dimmed, onUnlock = { locked = false; lastTouch = System.currentTimeMillis() })
         }
 
-        // LIVE indicator sits above every overlay (dim, lock): anyone near this phone can
-        // always see it is being viewed remotely. Safe mode keeps it on; it can't be hidden.
+        // Shutter blink — above the dim and lock overlays so people near the Camera see it.
+        val blink = remember { Animatable(0f) }
+        LaunchedEffect(flash) {
+            if (flash == 0) return@LaunchedEffect
+            blink.snapTo(0.95f)
+            blink.animateTo(0f, tween(420))
+        }
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = blink.value }.background(Color.White))
+
+        // "Still OK?" after the safe-mode session limit; answerable even when locked.
         AnimatedVisibility(
-            connected && (safeMode || !dimmed),
+            asking,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn() + scaleIn(initialScale = 0.94f),
+            exit = fadeOut(),
+        ) {
+            StillOkCard(secondsLeft = capLeft, onContinue = session::continueSession)
+        }
+
+        // Leave during a shot?
+        AnimatedVisibility(
+            confirmLeave && !locked,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(tween(420, easing = EaseOutExpo)) { it / 2 } + fadeIn(),
+            exit = fadeOut(),
+        ) {
+            Glass(
+                Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),
+                shape = RoundedCornerShape(32.dp),
+                tint = PoseColors.Ink2.copy(alpha = 0.94f),
+            ) {
+                Column(Modifier.padding(24.dp)) {
+                    Text("Photo in progress", style = PoseType.TitleSmall, color = PoseColors.Paper)
+                    VSpace(20.dp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SecondaryButton("Leave", { confirmLeave = false; onExit() }, Modifier.weight(1f))
+                        PrimaryButton("Stay", { confirmLeave = false }, Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        // LIVE indicator sits above every overlay (dim, lock): anyone near this phone can
+        // always see it is being viewed remotely, by whom and for how long — and stop it.
+        AnimatedVisibility(
+            connected,
             modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 14.dp),
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            LiveBadge((connection as? Connection.Connected)?.peer?.name.orEmpty())
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                LiveBadge((connection as? Connection.Connected)?.peer?.name.orEmpty(), sessionSec)
+                VSpace(8.dp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    StopChip { session.endSession("Stopped on the Camera") }
+                    if (!safeMode) NoticePill("Safe mode off", Tone.Warn)
+                }
+            }
         }
     }
 }
@@ -324,8 +420,18 @@ private fun SavedToast(lastSaved: Long?) {
     }
 }
 
+/** m:ss (or h:mm:ss) for the LIVE timer. */
+private fun clock(seconds: Int): String {
+    val s = seconds.coerceAtLeast(0)
+    val h = s / 3600
+    val m = s % 3600 / 60
+    val sec = s % 60
+    fun two(n: Int) = n.toString().padStart(2, '0')
+    return if (h > 0) "$h:${two(m)}:${two(sec)}" else "$m:${two(sec)}"
+}
+
 @Composable
-private fun LiveBadge(remoteName: String) {
+private fun LiveBadge(remoteName: String, seconds: Int) {
     Glass(shape = CircleShape, tint = Color.Black.copy(alpha = 0.55f)) {
         Row(Modifier.padding(start = 8.dp, end = 16.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             StatusDot(PoseColors.Danger, pulse = true, dotSize = 7.dp)
@@ -333,6 +439,41 @@ private fun LiveBadge(remoteName: String) {
             if (remoteName.isNotEmpty()) {
                 Text("  ·  $remoteName", style = PoseType.Caption, color = PoseColors.PaperDim, maxLines = 1)
             }
+            Text("  ·  ${clock(seconds)}", style = PoseType.Mono, color = PoseColors.PaperDim)
+        }
+    }
+}
+
+/** Ends the session from the Camera phone — for its owner or anyone standing next to it. */
+@Composable
+private fun StopChip(onStop: () -> Unit) {
+    Glass(
+        Modifier.height(36.dp).pressable(pressedScale = 0.92f, onClick = onStop),
+        shape = CircleShape,
+        tint = Color.Black.copy(alpha = 0.55f),
+    ) {
+        Text(
+            "Stop",
+            style = PoseType.Label,
+            color = PoseColors.Paper,
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = 18.dp),
+        )
+    }
+}
+
+@Composable
+private fun StillOkCard(secondsLeft: Int, onContinue: () -> Unit) {
+    Glass(
+        Modifier.padding(24.dp),
+        shape = RoundedCornerShape(32.dp),
+        tint = PoseColors.Ink2.copy(alpha = 0.94f),
+    ) {
+        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Still OK?", style = PoseType.Title, color = PoseColors.Paper)
+            VSpace(6.dp)
+            Text("Ends in ${secondsLeft.coerceAtLeast(0)}s", style = PoseType.Caption, color = PoseColors.PaperDim)
+            VSpace(20.dp)
+            PrimaryButton("Continue", onContinue, icon = PoseIcons.Check)
         }
     }
 }
@@ -341,11 +482,13 @@ private fun LiveBadge(remoteName: String) {
 private fun WaitingCard(
     deviceName: String,
     advertising: Boolean,
+    linkError: String?,
     pending: Connection.Pending?,
     ended: String?,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
     onRestart: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     val stage = when {
         ended != null -> 3
@@ -358,7 +501,7 @@ private fun WaitingCard(
         shape = RoundedCornerShape(32.dp),
         tint = PoseColors.Ink2.copy(alpha = 0.86f),
     ) {
-        Column(Modifier.padding(24.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(
                     when (stage) {
@@ -406,11 +549,17 @@ private fun WaitingCard(
                             Text("Same code?", style = PoseType.TitleSmall, color = PoseColors.Paper)
                             VSpace(18.dp)
                             CodeDigits(pending?.code.orEmpty())
+                            VSpace(20.dp)
+                            SecondaryButton("Cancel", onDecline, Modifier.fillMaxWidth())
                         }
                         else -> {
                             Text("Waiting for\nRemote", style = PoseType.Title, color = PoseColors.Paper)
                             VSpace(6.dp)
                             Text("Shown as $deviceName", style = PoseType.Caption, color = PoseColors.PaperDim)
+                            if (!advertising && linkError != null) {
+                                VSpace(20.dp)
+                                PrimaryButton("Try again", onRetry, icon = PoseIcons.Retake)
+                            }
                         }
                     }
                 }

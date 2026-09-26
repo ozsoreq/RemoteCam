@@ -82,6 +82,14 @@ object PoseIcons {
         moveTo(10.2f, 10.5f); lineTo(10.2f, 16.8f)
         moveTo(13.8f, 10.5f); lineTo(13.8f, 16.8f)
     }
+    val Share = icon("share") {
+        moveTo(12f, 3.5f); lineTo(12f, 14.5f)
+        moveTo(8f, 7.5f); lineTo(12f, 3.5f); lineTo(16f, 7.5f)
+        moveTo(8.5f, 10.5f); lineTo(6.5f, 10.5f); arcTo(1.5f, 1.5f, 0f, false, false, 5f, 12f)
+        lineTo(5f, 19f); arcTo(1.5f, 1.5f, 0f, false, false, 6.5f, 20.5f)
+        lineTo(17.5f, 20.5f); arcTo(1.5f, 1.5f, 0f, false, false, 19f, 19f)
+        lineTo(19f, 12f); arcTo(1.5f, 1.5f, 0f, false, false, 17.5f, 10.5f); lineTo(15.5f, 10.5f)
+    }
     val Lock = icon("lock") {
         roundRect(5f, 10.5f, 14f, 10.5f, 2.6f)
         moveTo(8.2f, 10.5f); lineTo(8.2f, 7.6f); arcTo(3.8f, 3.8f, 0f, false, true, 15.8f, 7.6f); lineTo(15.8f, 10.5f)

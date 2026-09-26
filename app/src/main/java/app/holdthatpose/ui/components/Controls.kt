@@ -45,9 +45,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.holdthatpose.net.Lens
 import app.holdthatpose.ui.icons.PoseIcons
 import app.holdthatpose.ui.theme.PoseColors
 import app.holdthatpose.ui.theme.PoseType
@@ -263,15 +268,17 @@ fun CountdownNumeral(value: Int?, modifier: Modifier = Modifier, color: Color = 
     }
 }
 
-/** Segmented lens picker: 0.5× · 1× · Front. */
+/** Segmented lens picker: 0.5× · 1× · Front. Disabled (dimmed) while a shot is running. */
 @Composable
 fun LensPicker(
-    options: List<app.holdthatpose.net.Lens>,
-    selected: app.holdthatpose.net.Lens,
-    onSelect: (app.holdthatpose.net.Lens) -> Unit,
+    options: List<Lens>,
+    selected: Lens,
+    onSelect: (Lens) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
-    Glass(modifier.height(40.dp), shape = CircleShape) {
+    val alpha by animateFloatAsState(if (enabled) 1f else 0.4f, label = "lensEnabled")
+    Glass(modifier.height(40.dp).graphicsLayer { this.alpha = alpha }, shape = CircleShape) {
         Row(
             Modifier.padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -282,14 +289,15 @@ fun LensPicker(
                 val bg by animateFloatAsState(if (active) 1f else 0f, tween(220), label = "lens")
                 Box(
                     Modifier
+                        .semantics { this.selected = active }
                         .height(32.dp)
                         .clip(CircleShape)
                         .background(PoseColors.Paper.copy(alpha = 0.95f * bg))
-                        .pressable(pressedScale = 0.9f) { onSelect(lens) }
+                        .pressable(enabled = enabled, pressedScale = 0.9f) { onSelect(lens) }
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (lens == app.holdthatpose.net.Lens.Front) {
+                    if (lens == Lens.Front) {
                         Icon(PoseIcons.Flip, "Front camera", Modifier.size(16.dp), tint = if (active) PoseColors.Ink else PoseColors.Paper)
                     } else {
                         Text(lens.label, style = PoseType.Mono, color = if (active) PoseColors.Ink else PoseColors.Paper)
@@ -309,6 +317,10 @@ fun CodeDigits(code: String, modifier: Modifier = Modifier, tileScale: Float = 1
     androidx.compose.runtime.CompositionLocalProvider(
         androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr,
     ) {
+        // The tiles have a fixed size, so the digits ignore the system font scale (they are
+        // already huge); otherwise large fonts clip the code that both phones must compare.
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(0.5f)
+        val digitSize = (64f * 0.82f * tileScale / fontScale).sp
         Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             code.forEach { ch ->
                 Glass(
@@ -318,7 +330,7 @@ fun CodeDigits(code: String, modifier: Modifier = Modifier, tileScale: Float = 1
                 ) {
                     Text(
                         "$ch",
-                        style = PoseType.Code.copy(fontSize = PoseType.Code.fontSize * 0.82f * tileScale),
+                        style = PoseType.Code.copy(fontSize = digitSize, lineHeight = digitSize),
                         color = PoseColors.Paper,
                         modifier = Modifier.align(Alignment.Center),
                     )

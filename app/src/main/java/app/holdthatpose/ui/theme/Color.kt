@@ -15,7 +15,7 @@ object PoseColors {
 
     val Paper = Color(0xFFF1F4F9)
     val PaperDim = Paper.copy(alpha = 0.62f)
-    val PaperFaint = Paper.copy(alpha = 0.38f)
+    val PaperFaint = Paper.copy(alpha = 0.55f)
     val PaperGhost = Paper.copy(alpha = 0.14f)
 
     val Glass = Color(0xFF0E131B).copy(alpha = 0.58f)

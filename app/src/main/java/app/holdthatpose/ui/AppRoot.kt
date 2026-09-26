@@ -12,7 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,10 +44,52 @@ sealed interface Screen {
     data class Consent(val then: Role?) : Screen
 }
 
+private fun Screen.key(): String = when (this) {
+    Screen.Onboarding -> "onboarding"
+    Screen.Home -> "home"
+    is Screen.Permissions -> "perm:${role.name}"
+    Screen.Camera -> "camera"
+    Screen.RemotePairing -> "pairing"
+    Screen.Remote -> "remote"
+    Screen.Settings -> "settings"
+    is Screen.Consent -> "consent:${then?.name.orEmpty()}"
+}
+
+private fun screenOf(key: String): Screen? {
+    fun role(name: String) = Role.entries.firstOrNull { it.name == name }
+    return when {
+        key == "onboarding" -> Screen.Onboarding
+        key == "home" -> Screen.Home
+        key.startsWith("perm:") -> role(key.removePrefix("perm:"))?.let { Screen.Permissions(it) }
+        key == "camera" -> Screen.Camera
+        key == "pairing" -> Screen.RemotePairing
+        key == "remote" -> Screen.Remote
+        key == "settings" -> Screen.Settings
+        key.startsWith("consent:") -> Screen.Consent(role(key.removePrefix("consent:")))
+        else -> null
+    }
+}
+
+/** Survives activity recreation (split screen, font size, fold…) so a live session isn't orphaned. */
+private val ScreenSaver = Saver<Screen, String>(
+    save = { it.key() },
+    restore = { screenOf(it) },
+)
+
 @Composable
 fun AppRoot(app: PoseApp, activity: MainActivity) {
     val context = LocalContext.current
-    var screen by remember { mutableStateOf(if (app.prefs.onboarded) Screen.Home else Screen.Onboarding) }
+    var screen by rememberSaveable(stateSaver = ScreenSaver) {
+        mutableStateOf(
+            when {
+                // The sessions live in the application: if one is still running, show it.
+                app.cameraSession.isRunning -> Screen.Camera
+                app.remoteSession.isRunning -> Screen.Remote
+                app.prefs.onboarded -> Screen.Home
+                else -> Screen.Onboarding
+            },
+        )
+    }
 
     // Tear down the screen we're leaving *before* switching, so the outgoing screen's exit
     // animation can't stop a link the incoming screen has just started.
@@ -56,14 +99,8 @@ fun AppRoot(app: PoseApp, activity: MainActivity) {
                 app.cameraSession.stop()
                 SessionService.stop(context)
             }
-            Screen.Remote -> {
-                app.remoteSession.stop()
-                app.remoteSession.suppressAutoConnect = true
-            }
-            Screen.RemotePairing -> if (to == Screen.Remote) {
-                app.remoteSession.suppressAutoConnect = false
-            } else {
-                app.remoteSession.suppressAutoConnect = false
+            Screen.Remote -> app.remoteSession.stop()
+            Screen.RemotePairing -> if (to != Screen.Remote) {
                 app.link.stopAll()
                 SessionService.stop(context)
             }

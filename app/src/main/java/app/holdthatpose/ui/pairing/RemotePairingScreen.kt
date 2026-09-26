@@ -67,6 +67,7 @@ import app.holdthatpose.ui.components.EaseOutExpo
 import app.holdthatpose.ui.components.pressable
 import app.holdthatpose.ui.home.AdSlot
 import app.holdthatpose.ui.icons.PoseIcons
+import app.holdthatpose.ui.permissions.RadioNotices
 import app.holdthatpose.ui.theme.PoseColors
 import app.holdthatpose.ui.theme.PoseType
 import kotlinx.coroutines.delay
@@ -89,13 +90,6 @@ fun RemotePairingScreen(app: PoseApp, onConnected: () -> Unit, onBack: () -> Uni
     LaunchedEffect(connection) {
         if (connection is Connection.Connected) onConnected()
     }
-    // One-tap reconnect to the phone we paired with last time.
-    LaunchedEffect(discovered, connection) {
-        if (connection !is Connection.None || app.remoteSession.suppressAutoConnect) return@LaunchedEffect
-        discovered.firstOrNull { it.role == Role.Camera && it.installId == app.prefs.lastPeerId }?.let {
-            app.remoteSession.connect(it)
-        }
-    }
     LaunchedEffect(error) {
         if (error != null) {
             delay(4_000)
@@ -103,7 +97,9 @@ fun RemotePairingScreen(app: PoseApp, onConnected: () -> Unit, onBack: () -> Uni
         }
     }
 
-    val cameras = discovered.filter { it.role == Role.Camera }
+    // The Camera we paired with last sorts first as a one-tap "Reconnect"; nothing connects by itself.
+    val lastPeerId = app.prefs.lastPeerId
+    val cameras = discovered.filter { it.role == Role.Camera }.sortedByDescending { it.installId == lastPeerId }
 
     Box(Modifier.fillMaxSize()) {
         AuroraBackground(intensity = 0.75f)
@@ -135,10 +131,23 @@ fun RemotePairingScreen(app: PoseApp, onConnected: () -> Unit, onBack: () -> Uni
                 )
             }
             error?.let { NoticePill(it, Tone.Bad, Modifier.padding(bottom = 12.dp)) }
+            RadioNotices(Modifier.padding(bottom = 12.dp))
+            AnimatedVisibility(error != null || (slow && cameras.isEmpty()), enter = fadeIn(), exit = fadeOut()) {
+                SecondaryButton(
+                    "Try again",
+                    {
+                        link.clearError()
+                        link.stopDiscovery()
+                        link.startDiscovery()
+                    },
+                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    icon = PoseIcons.Retake,
+                )
+            }
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(cameras, key = { it.installId }) { peer ->
-                    CameraRow(peer, known = peer.installId == app.prefs.lastPeerId) {
+                    CameraRow(peer, known = peer.installId == lastPeerId) {
                         app.remoteSession.connect(peer)
                     }
                 }
@@ -175,7 +184,7 @@ private fun CameraRow(peer: Peer, known: Boolean, onClick: () -> Unit) {
                 Text(peer.name, style = PoseType.BodyStrong, color = PoseColors.Paper)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatusDot(PoseColors.Mint, dotSize = 5.dp)
-                    Text(if (known) "Paired before" else "Camera", style = PoseType.Caption, color = PoseColors.PaperDim)
+                    Text(if (known) "Reconnect" else "Camera", style = PoseType.Caption, color = PoseColors.PaperDim)
                 }
             }
             Icon(PoseIcons.Arrow, null, Modifier.size(20.dp), tint = PoseColors.PaperFaint)

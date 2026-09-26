@@ -1,11 +1,22 @@
 package app.holdthatpose.ui.settings
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -35,17 +46,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import app.holdthatpose.BuildConfig
+import app.holdthatpose.R
 import app.holdthatpose.data.Prefs
 import app.holdthatpose.session.formatDuration
 import app.holdthatpose.ui.components.AuroraBackground
 import app.holdthatpose.ui.components.Glass
 import app.holdthatpose.ui.components.GlassIconButton
 import app.holdthatpose.ui.components.HSpace
+import app.holdthatpose.ui.components.EaseOutExpo
 import app.holdthatpose.ui.components.Overline
+import app.holdthatpose.ui.components.PrimaryButton
+import app.holdthatpose.ui.components.SecondaryButton
 import app.holdthatpose.ui.components.VSpace
 import app.holdthatpose.ui.components.pressable
 import app.holdthatpose.ui.icons.PoseIcons
@@ -55,8 +75,15 @@ import app.holdthatpose.ui.theme.PoseType
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Unit) {
+    val context = LocalContext.current
     var safe by remember { mutableStateOf(prefs.safeMode) }
     var idle by remember { mutableIntStateOf(prefs.idleTimeoutSec) }
+    var confirmOff by remember { mutableStateOf(false) }
+    var licences by remember { mutableStateOf(false) }
+    BackHandler(enabled = confirmOff || licences) {
+        confirmOff = false
+        licences = false
+    }
 
     Box(Modifier.fillMaxSize()) {
         AuroraBackground(intensity = 0.55f)
@@ -84,20 +111,27 @@ fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Uni
                             Text("Safe mode", style = PoseType.BodyStrong, color = PoseColors.Paper)
                             Text("Recommended", style = PoseType.Caption, color = PoseColors.PaperDim)
                         }
-                        Toggle(safe, "Safe mode switch") {
-                            safe = it
-                            prefs.safeMode = it
-                            if (it && idle <= 0) {
-                                idle = Prefs.DEFAULT_IDLE
-                                prefs.idleTimeoutSec = idle
+                        Toggle(safe, "Safe mode switch") { on ->
+                            if (on) {
+                                // Turning it back on never needs confirming.
+                                safe = true
+                                prefs.safeMode = true
+                                if (idle <= 0) {
+                                    idle = Prefs.DEFAULT_IDLE
+                                    prefs.idleTimeoutSec = idle
+                                }
+                            } else {
+                                confirmOff = true
                             }
                         }
                     }
                     VSpace(14.dp)
-                    SafeLine("Allow each new Remote on the Camera", safe)
-                    SafeLine("LIVE sign always shown on the Camera", safe)
-                    SafeLine("Sound when a Remote connects", safe)
-                    SafeLine("Auto-disconnect can't be turned off", safe)
+                    // Always on, whatever the switch says.
+                    SafeLine("Allow each new Remote on the Camera", true)
+                    SafeLine("LIVE sign and sounds on the Camera", true)
+                    // What safe mode adds.
+                    SafeLine("Check-in after 30 min", safe)
+                    SafeLine("LIVE sign stays readable when dimmed", safe)
                 }
             }
 
@@ -117,8 +151,7 @@ fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Uni
                     VSpace(16.dp)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Prefs.IDLE_CHOICES.forEach { value ->
-                            val enabled = !(safe && value <= 0)
-                            Chip(formatDuration(value), selected = value == idle, enabled = enabled) {
+                            Chip(formatDuration(value), selected = value == idle, enabled = true) {
                                 idle = value
                                 prefs.idleTimeoutSec = value
                             }
@@ -137,6 +170,28 @@ fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Uni
                     Icon(PoseIcons.Arrow, null, Modifier.size(20.dp), tint = PoseColors.PaperFaint)
                 }
             }
+            VSpace(14.dp)
+
+            // ── About ───────────────────────────────────
+            Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp)) {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    AboutRow("Privacy policy") {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(context.getString(R.string.privacy_policy_url)))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    }
+                    AboutRow("Licences") { licences = true }
+                    Text(
+                        "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        style = PoseType.Caption,
+                        color = PoseColors.PaperFaint,
+                        modifier = Modifier.padding(vertical = 12.dp),
+                    )
+                }
+            }
             VSpace(24.dp)
             Text(
                 "Applies from the next session.",
@@ -145,6 +200,83 @@ fun SettingsScreen(prefs: Prefs, onBack: () -> Unit, onResponsibleUse: () -> Uni
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
             VSpace(20.dp)
+        }
+
+        Sheet(confirmOff, onDismiss = { confirmOff = false }) {
+            Text("Turn off safe mode?", style = PoseType.TitleSmall, color = PoseColors.Paper)
+            VSpace(8.dp)
+            Text("No session limit. Allow, LIVE and chimes stay on.", style = PoseType.Body, color = PoseColors.PaperDim)
+            VSpace(22.dp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton(
+                    "Turn off",
+                    {
+                        confirmOff = false
+                        safe = false
+                        prefs.safeMode = false
+                    },
+                    Modifier.weight(1f),
+                )
+                PrimaryButton("Cancel", { confirmOff = false }, Modifier.weight(1f))
+            }
+        }
+
+        Sheet(licences, onDismiss = { licences = false }) {
+            Text("Licences", style = PoseType.TitleSmall, color = PoseColors.Paper)
+            VSpace(12.dp)
+            LICENCES.forEach { (what, licence) ->
+                Text(what, style = PoseType.BodyStrong, color = PoseColors.Paper)
+                Text(licence, style = PoseType.Caption, color = PoseColors.PaperDim)
+                VSpace(10.dp)
+            }
+            VSpace(8.dp)
+            SecondaryButton("Close", { licences = false }, Modifier.fillMaxWidth())
+        }
+    }
+}
+
+private val LICENCES = listOf(
+    "Instrument Serif, Manrope" to "SIL Open Font License 1.1",
+    "AndroidX, Jetpack Compose, CameraX" to "Apache License 2.0",
+    "ZXing" to "Apache License 2.0",
+    "Kotlin, kotlinx.coroutines" to "Apache License 2.0",
+    "Google Play services (Nearby)" to "Google APIs Terms of Service",
+)
+
+@Composable
+private fun AboutRow(label: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().pressable(pressedScale = 0.98f, onClick = onClick).padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = PoseType.BodyStrong, color = PoseColors.Paper, modifier = Modifier.weight(1f))
+        Icon(PoseIcons.Arrow, null, Modifier.size(20.dp), tint = PoseColors.PaperFaint)
+    }
+}
+
+/** Bottom sheet over a dimmed backdrop; tapping the backdrop dismisses it. */
+@Composable
+private fun BoxScope.Sheet(visible: Boolean, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.55f))
+                .pointerInput(Unit) { detectTapGestures { onDismiss() } },
+        )
+    }
+    AnimatedVisibility(
+        visible,
+        modifier = Modifier.align(Alignment.BottomCenter),
+        enter = slideInVertically(tween(420, easing = EaseOutExpo)) { it } + fadeIn(),
+        exit = slideOutVertically(tween(240)) { it } + fadeOut(),
+    ) {
+        Glass(
+            Modifier.fillMaxWidth().padding(10.dp).navigationBarsPadding(),
+            shape = RoundedCornerShape(32.dp),
+            tint = PoseColors.Ink2.copy(alpha = 0.97f),
+        ) {
+            Column(Modifier.padding(24.dp)) { content() }
         }
     }
 }
@@ -168,6 +300,7 @@ private fun Chip(label: String, selected: Boolean, enabled: Boolean, onClick: ()
     val bg by animateFloatAsState(if (selected) 1f else 0f, label = "chip")
     Box(
         Modifier
+            .semantics { this.selected = selected }
             .height(38.dp)
             .clip(CircleShape)
             .background(PoseColors.GlassLight)
