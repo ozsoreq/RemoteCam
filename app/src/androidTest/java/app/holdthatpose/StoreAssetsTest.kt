@@ -101,7 +101,7 @@ class StoreAssetsTest {
                             )
                             Text(
                                 "Two phones. One camera. No stranger needed.",
-                                style = PoseType.Body.copy(fontSize = (h.value * 0.05f).sp),
+                                style = PoseType.Body.copy(fontSize = (h.value * 0.05f).sp, lineHeight = (h.value * 0.066f).sp),
                                 color = PoseColors.PaperDim,
                             )
                         }
