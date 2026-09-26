@@ -108,13 +108,15 @@ yet, keeping the APK small.
 
 ## Build
 
-Requirements: JDK 17, Android SDK 35.
+Requirements: JDK 17, Android SDK 36.
 
 ```bash
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-./gradlew assembleRelease      # minified, signed with the debug key for sideloading
+./gradlew bundleRelease        # Play upload bundle: app/build/outputs/bundle/release/app-release.aab
+scripts/check-16kb.sh app/build/outputs/apk/release/app-release.apk   # Play's 16 KB page-size rule
 ```
 
-CI (`.github/workflows/android.yml`) builds both APKs on every push and uploads them as the
-`holdthatpose-apks` artifact. Min Android 8.0 (API 26). Requires Google Play services on both phones
-(for Nearby Connections).
+Release builds are signed with the upload key when `RELEASE_KEYSTORE_PATH`, `RELEASE_KEYSTORE_PASSWORD`,
+`RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD` are set (CI reads them from GitHub secrets); otherwise with
+the debug key. CI builds the APKs and the AAB, runs unit and emulator tests and the 16 KB check on every
+push. **Publishing steps: `docs/RELEASE_CHECKLIST.md`.**

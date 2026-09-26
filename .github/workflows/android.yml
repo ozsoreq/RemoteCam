@@ -18,6 +18,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # True once the upload-key secrets are configured (see docs/RELEASE_CHECKLIST.md).
+      HAS_UPLOAD_KEY: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -28,16 +31,47 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug + release APKs and run unit tests
-        run: ./gradlew --no-daemon assembleDebug assembleRelease testDebugUnitTest
+      - name: Decode upload key
+        if: env.HAS_UPLOAD_KEY == 'true'
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
 
-      - name: APK size
-        run: ls -la app/build/outputs/apk/*/*.apk
+      - name: Build APKs + Play bundle and run unit tests
+        env:
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleDebug assembleRelease bundleRelease testDebugUnitTest
+
+      - name: Signing status
+        run: |
+          if [ "$HAS_UPLOAD_KEY" = "true" ]; then
+            echo "Release APK/AAB signed with the upload key: ready for Play."
+          else
+            echo "::warning::Release APK/AAB are signed with the DEBUG key. Add the upload-key secrets (docs/RELEASE_CHECKLIST.md) before uploading to Play."
+          fi
+
+      - name: 16 KB page-size check (Google Play requirement)
+        run: scripts/check-16kb.sh app/build/outputs/apk/release/app-release.apk
+
+      - name: Sizes
+        run: ls -la app/build/outputs/apk/*/*.apk app/build/outputs/bundle/release/*.aab
 
       - uses: actions/upload-artifact@v4
         with:
           name: holdthatpose-apks
           path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: holdthatpose-play-bundle
+          path: |
+            app/build/outputs/bundle/release/*.aab
+            app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
@@ -83,6 +117,7 @@ jobs:
             adb root || true
             sleep 3
             mkdir -p screens && adb pull /sdcard/Android/data/app.holdthatpose/files/screens/. screens/ || true
+            mkdir -p store && adb pull /sdcard/Android/data/app.holdthatpose/files/store/. store/ || true
             adb logcat -d > logcat.txt || true
             cat app/build/outputs/androidTest-results/connected/debug/*.xml || true
             test ! -f tests-failed
@@ -96,9 +131,10 @@ jobs:
         run: |
           mkdir -p docs/screenshots
           cp screens/*.jpg docs/screenshots/
+          mkdir -p docs/store && cp store/*.png docs/store/ 2>/dev/null || true
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots
+          git add docs/screenshots docs/store
           git commit -m "Update app screenshots from emulator [skip ci]" && git push origin HEAD:${{ github.ref_name }} || echo "No screenshot changes"
 
       - uses: actions/upload-artifact@v4
@@ -107,6 +143,7 @@ jobs:
           name: ui-screens-and-reports
           path: |
             screens/
+            store/
             logcat.txt
             app/build/reports/androidTests/
           if-no-files-found: ignore

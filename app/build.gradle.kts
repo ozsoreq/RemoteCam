@@ -6,12 +6,13 @@ plugins {
 
 android {
     namespace = "app.holdthatpose"
-    compileSdk = 35
+    // Google Play requires new apps and updates to target Android 16 (API 36) from 31 Aug 2026.
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.holdthatpose"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
         resourceConfigurations += listOf("en")
@@ -23,14 +24,28 @@ android {
         animationsDisabled = true
     }
 
+    // Release signing: Play rejects debug-signed uploads. The upload key is never committed; CI
+    // decodes it from GitHub secrets and passes its location and passwords via environment
+    // variables (see docs/RELEASE_CHECKLIST.md). Without them, release builds fall back to the
+    // debug key so CI still produces an installable (but not uploadable) build.
+    val uploadKeystore = System.getenv("RELEASE_KEYSTORE_PATH")?.takeIf { it.isNotBlank() && file(it).exists() }
+    signingConfigs {
+        create("upload") {
+            if (uploadKeystore != null) {
+                storeFile = file(uploadKeystore)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so CI produces an installable APK; swap for a real
-            // upload key before publishing to Play.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (uploadKeystore != null) "upload" else "debug")
         }
     }
 
