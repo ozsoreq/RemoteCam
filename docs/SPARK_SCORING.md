@@ -14,6 +14,10 @@ evidence — cite it, and never score what hasn't been checked.
 | 6 | Performance & NFRs | 10% | Measured against spec targets (APK < 15 MB, cold start, latency, battery). Unmeasured targets can't score above 8. |
 | 7 | Verification evidence | 10% | Automated tests on emulator; real two-device testing for the linked flows. Emulator-only caps at 7. |
 
+**Skill:** this process is packaged as the `spark-scoring` Claude skill (`.claude/skills/spark-scoring/`):
+say "run spark scoring". Its calculator applies the weights and the hard caps:
+`python .claude/skills/spark-scoring/scripts/spark_score.py scores.json`.
+
 **How to run:** review the diff since the last score, check CI (build, unit tests, emulator UI
 tests), refresh screenshots by pushing a commit with `[screenshots]` in its message, score each
 dimension with evidence, fix anything that drags a dimension below 8, and re-score.
